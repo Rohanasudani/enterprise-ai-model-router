@@ -12,13 +12,15 @@ Build a resume-quality platform that compares LLMs on quality, latency, token co
 - API-backed mock eval runner that produces deterministic outputs, latency, token usage, cost, and rubric scores without API keys.
 - Live OpenAI eval runner that calls real models through the Responses API and persists latency, usage, output, and estimated cost.
 - Router recommendation engine that balances quality, cost, latency, context needs, and task-specific fit.
+- Enterprise policy engine that classifies requests and decides whether to allow, block, downgrade, or escalate model access.
+- Savings report API with JSON and CSV exports.
 - Dashboard with run history, model comparison, score breakdowns, and a readable "why this model" explanation.
 
 ## Future Milestones
 
 - Provider adapters for Anthropic, Gemini, Groq, and Together.
 - LLM-as-judge scoring with reusable rubric templates.
-- CSV/PDF export for reproducible quality/cost reports.
+- PDF export for reproducible quality/cost reports.
 - Auth, teams, shared datasets, and scheduled regression evals.
 
 ## Resume Story

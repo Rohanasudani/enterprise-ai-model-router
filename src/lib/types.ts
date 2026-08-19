@@ -123,3 +123,29 @@ export type EvalRunPayload = {
 export type PolicyDecisionPayload = {
   decision: PolicyDecision;
 };
+
+export type ActionCounts = Record<PolicyAction, number>;
+
+export type TeamSavingsSummary = {
+  teamId: string;
+  teamName: string;
+  monthlyBudgetUsd: number;
+  currentSpendUsd: number;
+  requestedCostUsd: number;
+  routedCostUsd: number;
+  savingsUsd: number;
+  budgetUsedPercent: number;
+  decisionCount: number;
+};
+
+export type SavingsReport = {
+  generatedAt: string;
+  decisionCount: number;
+  totalRequestedCostUsd: number;
+  totalRoutedCostUsd: number;
+  totalSavingsUsd: number;
+  savingsPercent: number;
+  actionCounts: ActionCounts;
+  teamSummaries: TeamSavingsSummary[];
+  recentDecisions: PolicyDecision[];
+};

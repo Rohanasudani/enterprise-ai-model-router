@@ -21,6 +21,7 @@ import type {
   PolicyDecisionPayload,
   PromptCase,
   RouterWeights,
+  SavingsReport,
   Team,
 } from "@/lib/types";
 
@@ -49,6 +50,7 @@ export default function Home() {
   const [history, setHistory] = useState<EvalResult[]>(seedRunHistory);
   const [recentPolicyDecisions, setRecentPolicyDecisions] = useState<PolicyDecision[]>([]);
   const [policyDecision, setPolicyDecision] = useState<PolicyDecision | null>(null);
+  const [savingsReport, setSavingsReport] = useState<SavingsReport | null>(null);
   const [dataSource, setDataSource] = useState<"seed" | "database">("seed");
   const [evalMode, setEvalMode] = useState<EvalMode>("mock");
   const [isRunning, setIsRunning] = useState(false);
@@ -73,6 +75,19 @@ export default function Home() {
   const bestCost = Math.min(...latestResults.map((result) => result.totalCostUsd));
   const fastestLatency = Math.min(...latestResults.map((result) => result.latencyMs));
 
+  async function refreshSavingsReport() {
+    try {
+      const response = await fetch("/api/reports/savings");
+      if (!response.ok) {
+        throw new Error("Savings report API unavailable");
+      }
+      const report = (await response.json()) as SavingsReport;
+      setSavingsReport(report);
+    } catch {
+      setSavingsReport(null);
+    }
+  }
+
   useEffect(() => {
     async function loadBootstrapData() {
       try {
@@ -96,6 +111,7 @@ export default function Home() {
         setHistory(payload.recentResults);
         setRecentPolicyDecisions(payload.recentPolicyDecisions);
         setPolicyDecision(payload.recentPolicyDecisions[0] ?? null);
+        void refreshSavingsReport();
         setDataSource("database");
       } catch {
         setDataSource("seed");
@@ -142,6 +158,7 @@ export default function Home() {
             : team,
         ),
       );
+      void refreshSavingsReport();
       setPolicyMessage("Policy decision saved to audit log.");
       setDataSource("database");
     } catch (error) {
@@ -372,6 +389,11 @@ export default function Home() {
           <section>
             <div className="metric-strip">
               <div className="metric">
+                <div className="metric-label">Savings</div>
+                <div className="metric-value">{currency(savingsReport?.totalSavingsUsd ?? 0)}</div>
+                <div className="metric-note">{savingsReport?.savingsPercent ?? 0}% saved by policy</div>
+              </div>
+              <div className="metric">
                 <div className="metric-label">Recommended</div>
                 <div className="metric-value">{winner.name}</div>
                 <div className="metric-note">{winner.provider}</div>
@@ -394,6 +416,55 @@ export default function Home() {
             </div>
 
             <div className="main-grid">
+              <div className="panel">
+                <div className="panel-header">
+                  <p className="panel-title">Savings Report</p>
+                  <p className="panel-subtitle">Enterprise spend governance across policy-routed requests.</p>
+                </div>
+                <div className="panel-body recommendation">
+                  <div className="policy-stats">
+                    <div>
+                      <span>Requested</span>
+                      <strong>{currency(savingsReport?.totalRequestedCostUsd ?? 0)}</strong>
+                    </div>
+                    <div>
+                      <span>Routed</span>
+                      <strong>{currency(savingsReport?.totalRoutedCostUsd ?? 0)}</strong>
+                    </div>
+                    <div>
+                      <span>Decisions</span>
+                      <strong>{savingsReport?.decisionCount ?? 0}</strong>
+                    </div>
+                  </div>
+                  <div className="action-grid">
+                    <div>
+                      <span className="mini-action allow">allow</span>
+                      <strong>{savingsReport?.actionCounts.allow ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="mini-action block">block</span>
+                      <strong>{savingsReport?.actionCounts.block ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="mini-action downgrade">downgrade</span>
+                      <strong>{savingsReport?.actionCounts.downgrade ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="mini-action escalate">escalate</span>
+                      <strong>{savingsReport?.actionCounts.escalate ?? 0}</strong>
+                    </div>
+                  </div>
+                  <div className="export-row">
+                    <a className="secondary-link" href="/api/reports/savings" target="_blank">
+                      Export JSON
+                    </a>
+                    <a className="secondary-link" href="/api/reports/savings?format=csv">
+                      Export CSV
+                    </a>
+                  </div>
+                </div>
+              </div>
+
               <div className="panel">
                 <div className="panel-header">
                   <p className="panel-title">Model Comparison</p>
@@ -591,6 +662,31 @@ export default function Home() {
                     );
                   })}
                   {recentPolicyDecisions.length === 0 ? <p className="panel-subtitle">No policy decisions yet.</p> : null}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <p className="panel-title">Team Budget Utilization</p>
+                  <p className="panel-subtitle">Spend, budget, and savings by team.</p>
+                </div>
+                <div className="panel-body">
+                  {(savingsReport?.teamSummaries ?? []).map((team) => (
+                    <article className="team-budget" key={team.teamId}>
+                      <div className="run-title">
+                        <span>{team.teamName}</span>
+                        <span>{team.budgetUsedPercent}%</span>
+                      </div>
+                      <div className="bar-track">
+                        <div className="bar-fill" style={{ width: percent(Math.min(team.budgetUsedPercent, 100)) }} />
+                      </div>
+                      <div className="run-meta">
+                        {currency(team.currentSpendUsd)} used of {currency(team.monthlyBudgetUsd)} · saved{" "}
+                        {currency(team.savingsUsd)} across {team.decisionCount} decisions
+                      </div>
+                    </article>
+                  ))}
+                  {!savingsReport ? <p className="panel-subtitle">Savings report unavailable until the API responds.</p> : null}
                 </div>
               </div>
             </div>

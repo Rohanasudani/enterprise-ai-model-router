@@ -414,6 +414,49 @@ button {
   font-size: 16px;
 }
 
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-grid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 9px;
+  justify-items: start;
+}
+
+.action-grid strong {
+  font-size: 20px;
+}
+
+.export-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
+.secondary-link:hover {
+  background: #cbd5e1;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -486,6 +529,16 @@ button {
 }
 
 .run-card + .run-card {
+  margin-top: 10px;
+}
+
+.team-budget {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.team-budget + .team-budget {
   margin-top: 10px;
 }
 
