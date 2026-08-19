@@ -134,6 +134,10 @@ export type JudgeResultsPayload = {
   results: EvalResult[];
 };
 
+export type PromptCasePayload = {
+  promptCase: PromptCase;
+};
+
 export type ActionCounts = Record<PolicyAction, number>;
 
 export type TeamSavingsSummary = {

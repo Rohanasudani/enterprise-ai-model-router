@@ -21,7 +21,9 @@ import type {
   PolicyDecision,
   PolicyDecisionPayload,
   PromptCase,
+  PromptCasePayload,
   RouterWeights,
+  RubricCriterion,
   SavingsReport,
   Team,
 } from "@/lib/types";
@@ -38,12 +40,43 @@ function categoryLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function createBlankPromptCase(): PromptCase {
+  return {
+    id: `custom-${Date.now()}`,
+    dataset: "Custom evals",
+    title: "",
+    taskType: "coding",
+    difficulty: 60,
+    inputTokens: 800,
+    expectedOutput: "",
+    prompt: "",
+    rubric: [
+      {
+        name: "Correctness",
+        weight: 0.5,
+        description: "Answer satisfies the main task requirements.",
+      },
+      {
+        name: "Clarity",
+        weight: 0.3,
+        description: "Answer is clear, concise, and easy to evaluate.",
+      },
+      {
+        name: "Risk handling",
+        weight: 0.2,
+        description: "Answer identifies caveats, risks, or edge cases.",
+      },
+    ],
+  };
+}
+
 export default function Home() {
   const [models, setModels] = useState<ModelProfile[]>(seedModels);
   const [promptCases, setPromptCases] = useState<PromptCase[]>(seedPromptCases);
   const [teams, setTeams] = useState<Team[]>(seedTeams);
   const [users, setUsers] = useState<AppUser[]>(seedUsers);
   const [selectedPromptId, setSelectedPromptId] = useState(seedPromptCases[0].id);
+  const [promptDraft, setPromptDraft] = useState<PromptCase>(seedPromptCases[0]);
   const [selectedUserId, setSelectedUserId] = useState(seedUsers[0].id);
   const [requestedModelId, setRequestedModelId] = useState(seedModels[0].id);
   const [weights, setWeights] = useState<RouterWeights>(defaultRouterWeights);
@@ -57,9 +90,11 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [isJudging, setIsJudging] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [runMessage, setRunMessage] = useState("Ready to run model comparison.");
   const [judgeMessage, setJudgeMessage] = useState("Run an eval, then judge the saved outputs.");
   const [policyMessage, setPolicyMessage] = useState("Ready to route enterprise request.");
+  const [promptMessage, setPromptMessage] = useState("Edit an existing prompt case or create a new dataset item.");
 
   const selectedPrompt = promptCases.find((prompt) => prompt.id === selectedPromptId) ?? promptCases[0] ?? seedPromptCases[0];
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? seedUsers[0];
@@ -108,6 +143,7 @@ export default function Home() {
         setTeams(payload.teams);
         setUsers(payload.users);
         setSelectedPromptId(initialPrompt.id);
+        setPromptDraft(initialPrompt);
         setSelectedUserId(payload.users[0]?.id ?? seedUsers[0].id);
         setRequestedModelId(payload.models[0]?.id ?? seedModels[0].id);
         setLatestResults(runMockEval(initialPrompt, payload.models));
@@ -127,7 +163,88 @@ export default function Home() {
   function updatePrompt(promptId: string) {
     const nextPrompt = promptCases.find((prompt) => prompt.id === promptId) ?? promptCases[0];
     setSelectedPromptId(promptId);
+    setPromptDraft(nextPrompt);
     setLatestResults(runMockEval(nextPrompt, models));
+  }
+
+  function updatePromptDraft<K extends keyof PromptCase>(key: K, value: PromptCase[K]) {
+    setPromptDraft((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function updateRubricCriterion(index: number, patch: Partial<RubricCriterion>) {
+    setPromptDraft((current) => ({
+      ...current,
+      rubric: current.rubric.map((criterion, currentIndex) =>
+        currentIndex === index ? { ...criterion, ...patch } : criterion,
+      ),
+    }));
+  }
+
+  function addRubricCriterion() {
+    setPromptDraft((current) => ({
+      ...current,
+      rubric: [
+        ...current.rubric,
+        {
+          name: "New criterion",
+          weight: 0.2,
+          description: "Describe what a high-scoring answer should do.",
+        },
+      ],
+    }));
+  }
+
+  function removeRubricCriterion(index: number) {
+    setPromptDraft((current) => ({
+      ...current,
+      rubric: current.rubric.filter((_, currentIndex) => currentIndex !== index),
+    }));
+  }
+
+  function newPromptCase() {
+    const blank = createBlankPromptCase();
+    setPromptDraft(blank);
+    setSelectedPromptId(blank.id);
+    setPromptMessage("Drafting a new prompt case. Save it to add it to the dataset.");
+  }
+
+  async function savePromptCase() {
+    setIsSavingPrompt(true);
+    setPromptMessage("Saving prompt case to PostgreSQL...");
+    try {
+      const response = await fetch("/api/prompt-cases", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(promptDraft),
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorPayload?.error ?? "Prompt save failed");
+      }
+
+      const payload = (await response.json()) as PromptCasePayload;
+      setPromptCases((current) => {
+        const exists = current.some((prompt) => prompt.id === payload.promptCase.id);
+        return exists
+          ? current.map((prompt) => (prompt.id === payload.promptCase.id ? payload.promptCase : prompt))
+          : [...current, payload.promptCase];
+      });
+      setSelectedPromptId(payload.promptCase.id);
+      setPromptDraft(payload.promptCase);
+      setLatestResults(runMockEval(payload.promptCase, models));
+      setDataSource("database");
+      setPromptMessage("Prompt case saved and ready for eval runs.");
+    } catch (error) {
+      setPromptMessage(error instanceof Error ? error.message : "Prompt save failed.");
+    } finally {
+      setIsSavingPrompt(false);
+    }
   }
 
   async function routePolicyRequest() {
@@ -304,6 +421,10 @@ export default function Home() {
                 <textarea className="textarea" id="prompt-body" value={selectedPrompt.prompt} readOnly />
               </div>
 
+              <button className="secondary-button" onClick={newPromptCase}>
+                New Prompt Case
+              </button>
+
               <div className="control-group">
                 <label>Provider Mode</label>
                 <div className="segmented-control" aria-label="Provider mode">
@@ -457,6 +578,128 @@ export default function Home() {
             </div>
 
             <div className="main-grid">
+              <div className="panel">
+                <div className="panel-header">
+                  <p className="panel-title">Dataset and Rubric Manager</p>
+                  <p className="panel-subtitle">Create or update prompt cases that persist to PostgreSQL.</p>
+                </div>
+                <div className="panel-body prompt-editor">
+                  <div className="form-grid two">
+                    <div className="control-group">
+                      <label htmlFor="draft-dataset">Dataset</label>
+                      <input
+                        className="select"
+                        id="draft-dataset"
+                        value={promptDraft.dataset}
+                        onChange={(event) => updatePromptDraft("dataset", event.target.value)}
+                      />
+                    </div>
+                    <div className="control-group">
+                      <label htmlFor="draft-title">Title</label>
+                      <input
+                        className="select"
+                        id="draft-title"
+                        value={promptDraft.title}
+                        onChange={(event) => updatePromptDraft("title", event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-grid three">
+                    <div className="control-group">
+                      <label htmlFor="draft-task-type">Task Type</label>
+                      <select
+                        className="select"
+                        id="draft-task-type"
+                        value={promptDraft.taskType}
+                        onChange={(event) => updatePromptDraft("taskType", event.target.value as PromptCase["taskType"])}
+                      >
+                        <option value="coding">coding</option>
+                        <option value="summarization">summarization</option>
+                        <option value="reasoning">reasoning</option>
+                        <option value="support">support</option>
+                      </select>
+                    </div>
+                    <div className="control-group">
+                      <label htmlFor="draft-difficulty">Difficulty</label>
+                      <input
+                        className="select"
+                        id="draft-difficulty"
+                        max="100"
+                        min="1"
+                        type="number"
+                        value={promptDraft.difficulty}
+                        onChange={(event) => updatePromptDraft("difficulty", Number(event.target.value))}
+                      />
+                    </div>
+                    <div className="control-group">
+                      <label htmlFor="draft-input-tokens">Input Tokens</label>
+                      <input
+                        className="select"
+                        id="draft-input-tokens"
+                        min="1"
+                        type="number"
+                        value={promptDraft.inputTokens}
+                        onChange={(event) => updatePromptDraft("inputTokens", Number(event.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <div className="control-group">
+                    <label htmlFor="draft-prompt">Prompt</label>
+                    <textarea
+                      className="textarea"
+                      id="draft-prompt"
+                      value={promptDraft.prompt}
+                      onChange={(event) => updatePromptDraft("prompt", event.target.value)}
+                    />
+                  </div>
+                  <div className="control-group">
+                    <label htmlFor="draft-expected-output">Expected Output</label>
+                    <textarea
+                      className="textarea compact"
+                      id="draft-expected-output"
+                      value={promptDraft.expectedOutput}
+                      onChange={(event) => updatePromptDraft("expectedOutput", event.target.value)}
+                    />
+                  </div>
+                  <div className="rubric-editor">
+                    {promptDraft.rubric.map((criterion, index) => (
+                      <div className="rubric-edit-row" key={`${criterion.name}-${index}`}>
+                        <input
+                          className="select"
+                          value={criterion.name}
+                          onChange={(event) => updateRubricCriterion(index, { name: event.target.value })}
+                        />
+                        <input
+                          className="select"
+                          min="0.05"
+                          step="0.05"
+                          type="number"
+                          value={criterion.weight}
+                          onChange={(event) => updateRubricCriterion(index, { weight: Number(event.target.value) })}
+                        />
+                        <input
+                          className="select"
+                          value={criterion.description}
+                          onChange={(event) => updateRubricCriterion(index, { description: event.target.value })}
+                        />
+                        <button className="icon-button" type="button" onClick={() => removeRubricCriterion(index)}>
+                          -
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="editor-actions">
+                    <button className="secondary-button" type="button" onClick={addRubricCriterion}>
+                      Add Criterion
+                    </button>
+                    <button className="primary-button" type="button" onClick={savePromptCase} disabled={isSavingPrompt}>
+                      {isSavingPrompt ? "Saving..." : "Save Prompt"}
+                    </button>
+                  </div>
+                  <p className="helper-text">{promptMessage}</p>
+                </div>
+              </div>
+
               <div className="panel">
                 <div className="panel-header">
                   <p className="panel-title">Savings Report</p>

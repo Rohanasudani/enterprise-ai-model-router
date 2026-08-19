@@ -215,6 +215,10 @@ button {
   line-height: 1.45;
 }
 
+.textarea.compact {
+  min-height: 76px;
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: 1fr 44px;
@@ -263,6 +267,55 @@ button {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.prompt-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid.three {
+  grid-template-columns: 1.2fr 0.8fr 0.9fr;
+}
+
+.rubric-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.rubric-edit-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) 88px minmax(180px, 1.4fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rose);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .metric-strip {
@@ -650,5 +703,15 @@ button {
 
   .recommendation-head {
     flex-direction: column;
+  }
+
+  .form-grid.two,
+  .form-grid.three,
+  .rubric-edit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .icon-button {
+    width: 100%;
   }
 }
