@@ -1,17 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { models as seedModels, promptCases as seedPromptCases, seedRunHistory } from "@/lib/data";
+import {
+  models as seedModels,
+  promptCases as seedPromptCases,
+  seedRunHistory,
+  teams as seedTeams,
+  users as seedUsers,
+} from "@/lib/data";
 import { runMockEval } from "@/lib/mockEval";
 import { defaultRouterWeights, recommendModel } from "@/lib/router";
 import type {
+  AppUser,
   BootstrapPayload,
   EvalMode,
   EvalResult,
   EvalRunPayload,
   ModelProfile,
+  PolicyDecision,
+  PolicyDecisionPayload,
   PromptCase,
   RouterWeights,
+  Team,
 } from "@/lib/types";
 
 function currency(value: number) {
@@ -22,19 +32,37 @@ function percent(value: number) {
   return `${Math.round(value)}%`;
 }
 
+function categoryLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default function Home() {
   const [models, setModels] = useState<ModelProfile[]>(seedModels);
   const [promptCases, setPromptCases] = useState<PromptCase[]>(seedPromptCases);
+  const [teams, setTeams] = useState<Team[]>(seedTeams);
+  const [users, setUsers] = useState<AppUser[]>(seedUsers);
   const [selectedPromptId, setSelectedPromptId] = useState(seedPromptCases[0].id);
+  const [selectedUserId, setSelectedUserId] = useState(seedUsers[0].id);
+  const [requestedModelId, setRequestedModelId] = useState(seedModels[0].id);
   const [weights, setWeights] = useState<RouterWeights>(defaultRouterWeights);
   const [latestResults, setLatestResults] = useState<EvalResult[]>(() => runMockEval(seedPromptCases[0], seedModels));
   const [history, setHistory] = useState<EvalResult[]>(seedRunHistory);
+  const [recentPolicyDecisions, setRecentPolicyDecisions] = useState<PolicyDecision[]>([]);
+  const [policyDecision, setPolicyDecision] = useState<PolicyDecision | null>(null);
   const [dataSource, setDataSource] = useState<"seed" | "database">("seed");
   const [evalMode, setEvalMode] = useState<EvalMode>("mock");
   const [isRunning, setIsRunning] = useState(false);
+  const [isRouting, setIsRouting] = useState(false);
   const [runMessage, setRunMessage] = useState("Ready to run model comparison.");
+  const [policyMessage, setPolicyMessage] = useState("Ready to route enterprise request.");
 
   const selectedPrompt = promptCases.find((prompt) => prompt.id === selectedPromptId) ?? promptCases[0] ?? seedPromptCases[0];
+  const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? seedUsers[0];
+  const selectedTeam = teams.find((team) => team.id === selectedUser.teamId) ?? teams[0] ?? seedTeams[0];
+  const requestedModel = models.find((model) => model.id === requestedModelId) ?? models[0];
+  const policySelectedModel = policyDecision
+    ? models.find((model) => model.id === policyDecision.selectedModelId)
+    : undefined;
   const decision = useMemo(
     () => recommendModel(selectedPrompt, latestResults, weights, models),
     [latestResults, selectedPrompt, weights, models],
@@ -59,9 +87,15 @@ export default function Home() {
         const initialPrompt = payload.promptCases[0];
         setModels(payload.models);
         setPromptCases(payload.promptCases);
+        setTeams(payload.teams);
+        setUsers(payload.users);
         setSelectedPromptId(initialPrompt.id);
+        setSelectedUserId(payload.users[0]?.id ?? seedUsers[0].id);
+        setRequestedModelId(payload.models[0]?.id ?? seedModels[0].id);
         setLatestResults(runMockEval(initialPrompt, payload.models));
         setHistory(payload.recentResults);
+        setRecentPolicyDecisions(payload.recentPolicyDecisions);
+        setPolicyDecision(payload.recentPolicyDecisions[0] ?? null);
         setDataSource("database");
       } catch {
         setDataSource("seed");
@@ -75,6 +109,46 @@ export default function Home() {
     const nextPrompt = promptCases.find((prompt) => prompt.id === promptId) ?? promptCases[0];
     setSelectedPromptId(promptId);
     setLatestResults(runMockEval(nextPrompt, models));
+  }
+
+  async function routePolicyRequest() {
+    setIsRouting(true);
+    setPolicyMessage("Routing request through enterprise policy...");
+    try {
+      const response = await fetch("/api/policy-decisions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          promptId: selectedPrompt.id,
+          userId: selectedUser.id,
+          requestedModelId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorPayload?.error ?? "Policy route failed");
+      }
+
+      const payload = (await response.json()) as PolicyDecisionPayload;
+      setPolicyDecision(payload.decision);
+      setRecentPolicyDecisions((current) => [payload.decision, ...current].slice(0, 10));
+      setTeams((current) =>
+        current.map((team) =>
+          team.id === payload.decision.teamId
+            ? { ...team, currentSpendUsd: team.currentSpendUsd + payload.decision.estimatedRoutedCostUsd }
+            : team,
+        ),
+      );
+      setPolicyMessage("Policy decision saved to audit log.");
+      setDataSource("database");
+    } catch (error) {
+      setPolicyMessage(error instanceof Error ? error.message : "Policy route failed.");
+    } finally {
+      setIsRouting(false);
+    }
   }
 
   async function runEval() {
@@ -195,6 +269,42 @@ export default function Home() {
               </div>
 
               <div className="control-group">
+                <label htmlFor="policy-user">Requester</label>
+                <select
+                  className="select"
+                  id="policy-user"
+                  value={selectedUserId}
+                  onChange={(event) => setSelectedUserId(event.target.value)}
+                >
+                  {users.map((user) => {
+                    const team = teams.find((candidate) => candidate.id === user.teamId);
+                    return (
+                      <option key={user.id} value={user.id}>
+                        {user.name} · {team?.name ?? "Team"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="control-group">
+                <label htmlFor="requested-model">Requested Model</label>
+                <select
+                  className="select"
+                  id="requested-model"
+                  value={requestedModelId}
+                  onChange={(event) => setRequestedModelId(event.target.value)}
+                >
+                  {models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} · {model.provider}
+                    </option>
+                  ))}
+                </select>
+                <p className="helper-text">{policyMessage}</p>
+              </div>
+
+              <div className="control-group">
                 <label>Quality Weight</label>
                 <div className="slider-row">
                   <input
@@ -252,6 +362,9 @@ export default function Home() {
 
               <button className="secondary-button" onClick={() => setWeights(defaultRouterWeights)}>
                 Reset Weights
+              </button>
+              <button className="primary-button policy-button" onClick={routePolicyRequest} disabled={isRouting}>
+                {isRouting ? "Routing..." : "Route Request"}
               </button>
             </div>
           </aside>
@@ -363,6 +476,52 @@ export default function Home() {
 
               <div className="panel">
                 <div className="panel-header">
+                  <p className="panel-title">Enterprise Policy Decision</p>
+                  <p className="panel-subtitle">
+                    {selectedUser.name} · {selectedTeam.name} · {requestedModel.name} requested
+                  </p>
+                </div>
+                <div className="panel-body recommendation">
+                  {policyDecision ? (
+                    <>
+                      <div className="recommendation-head">
+                        <div>
+                          <span className={`action-badge ${policyDecision.action}`}>{policyDecision.action}</span>
+                          <h2>{policySelectedModel?.name ?? "Blocked"}</h2>
+                          <p className="panel-subtitle">
+                            {categoryLabel(policyDecision.category)} · complexity {policyDecision.complexityScore}/100
+                          </p>
+                        </div>
+                        <div className="score-large">{currency(policyDecision.savingsUsd)}</div>
+                      </div>
+                      <div className="policy-stats">
+                        <div>
+                          <span>Requested</span>
+                          <strong>{currency(policyDecision.estimatedRequestedCostUsd)}</strong>
+                        </div>
+                        <div>
+                          <span>Routed</span>
+                          <strong>{currency(policyDecision.estimatedRoutedCostUsd)}</strong>
+                        </div>
+                        <div>
+                          <span>Budget Left</span>
+                          <strong>{currency(policyDecision.budgetRemainingUsd)}</strong>
+                        </div>
+                      </div>
+                      <ul className="reason-list">
+                        {policyDecision.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="panel-subtitle">Run a policy route to create the first audit decision.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
                   <p className="panel-title">Rubric Scores</p>
                   <p className="panel-subtitle">{selectedPrompt.expectedOutput}</p>
                 </div>
@@ -406,6 +565,32 @@ export default function Home() {
                       </article>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <p className="panel-title">Policy Audit Log</p>
+                  <p className="panel-subtitle">Recent enterprise routing decisions.</p>
+                </div>
+                <div className="panel-body">
+                  {recentPolicyDecisions.slice(0, 6).map((decision) => {
+                    const user = users.find((candidate) => candidate.id === decision.userId);
+                    const selected = models.find((candidate) => candidate.id === decision.selectedModelId);
+                    return (
+                      <article className="run-card" key={decision.id}>
+                        <div className="run-title">
+                          <span>{user?.name ?? "Requester"}</span>
+                          <span className={`mini-action ${decision.action}`}>{decision.action}</span>
+                        </div>
+                        <div className="run-meta">
+                          {selected?.name ?? "Blocked"} · {categoryLabel(decision.category)} · saved{" "}
+                          {currency(decision.savingsUsd)}
+                        </div>
+                      </article>
+                    );
+                  })}
+                  {recentPolicyDecisions.length === 0 ? <p className="panel-subtitle">No policy decisions yet.</p> : null}
                 </div>
               </div>
             </div>

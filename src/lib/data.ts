@@ -1,4 +1,4 @@
-import type { EvalResult, ModelProfile, PromptCase } from "./types";
+import type { AppUser, EvalResult, ModelProfile, PromptCase, Team } from "./types";
 
 export const models: ModelProfile[] = [
   {
@@ -217,6 +217,51 @@ export const promptCases: PromptCase[] = [
         description: "Provides one defensible final choice.",
       },
     ],
+  },
+];
+
+export const teams: Team[] = [
+  {
+    id: "platform",
+    name: "Platform Engineering",
+    monthlyBudgetUsd: 500,
+    currentSpendUsd: 214.5,
+  },
+  {
+    id: "growth",
+    name: "Growth Product",
+    monthlyBudgetUsd: 180,
+    currentSpendUsd: 92.2,
+  },
+  {
+    id: "contractors",
+    name: "Contractor Pool",
+    monthlyBudgetUsd: 80,
+    currentSpendUsd: 76.4,
+  },
+];
+
+export const users: AppUser[] = [
+  {
+    id: "maya-platform",
+    name: "Maya Chen",
+    email: "maya@company.dev",
+    role: "Senior Backend Engineer",
+    teamId: "platform",
+  },
+  {
+    id: "rohan-growth",
+    name: "Rohan Patel",
+    email: "rohan@company.dev",
+    role: "Product Engineer",
+    teamId: "growth",
+  },
+  {
+    id: "alex-contractor",
+    name: "Alex Rivera",
+    email: "alex.contractor@company.dev",
+    role: "Contractor",
+    teamId: "contractors",
   },
 ];
 

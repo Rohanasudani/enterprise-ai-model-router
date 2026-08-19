@@ -19,6 +19,23 @@ enum EvalMode {
   live_openai
 }
 
+enum PolicyAction {
+  allow
+  block
+  downgrade
+  escalate
+}
+
+enum RequestCategory {
+  work_coding
+  work_support
+  work_summary
+  business_reasoning
+  personal
+  sensitive
+  unknown
+}
+
 model ModelProfile {
   id                String       @id
   name              String
@@ -50,9 +67,35 @@ model PromptCase {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   evalResults    EvalResult[]
+  policyDecisions PolicyDecision[]
 
   @@index([dataset])
   @@index([taskType])
+}
+
+model Team {
+  id               String           @id
+  name             String
+  monthlyBudgetUsd Float
+  currentSpendUsd  Float
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  users            AppUser[]
+  policyDecisions  PolicyDecision[]
+}
+
+model AppUser {
+  id              String           @id
+  name            String
+  email           String           @unique
+  role            String
+  teamId          String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  policyDecisions PolicyDecision[]
+
+  @@index([teamId])
 }
 
 model EvalRun {
@@ -100,4 +143,32 @@ model RouterDecision {
   evalRun     EvalRun  @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
 
   @@index([modelId])
+}
+
+model PolicyDecision {
+  id                         String          @id @default(cuid())
+  promptId                   String
+  userId                     String
+  teamId                     String
+  requestedModelId           String
+  selectedModelId            String?
+  action                     PolicyAction
+  category                   RequestCategory
+  complexityScore            Int
+  workRelated                Boolean
+  estimatedRequestedCostUsd  Float
+  estimatedRoutedCostUsd     Float
+  savingsUsd                 Float
+  budgetRemainingUsd         Float
+  reasons                    String[]
+  createdAt                  DateTime        @default(now())
+  prompt                     PromptCase      @relation(fields: [promptId], references: [id])
+  user                       AppUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team                       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([promptId])
+  @@index([userId])
+  @@index([teamId])
+  @@index([action])
+  @@index([createdAt])
 }

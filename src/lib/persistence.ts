@@ -1,5 +1,14 @@
 import type { Prisma } from "@prisma/client";
-import type { EvalResult, ModelProfile, PromptCase, RubricCriterion, TaskType } from "./types";
+import type {
+  AppUser,
+  EvalResult,
+  ModelProfile,
+  PolicyDecision,
+  PromptCase,
+  RubricCriterion,
+  TaskType,
+  Team,
+} from "./types";
 
 type DbModelProfile = {
   id: string;
@@ -40,6 +49,40 @@ type DbEvalResult = {
   createdAt: Date;
 };
 
+type DbTeam = {
+  id: string;
+  name: string;
+  monthlyBudgetUsd: number;
+  currentSpendUsd: number;
+};
+
+type DbAppUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  teamId: string;
+};
+
+type DbPolicyDecision = {
+  id: string;
+  promptId: string;
+  userId: string;
+  teamId: string;
+  requestedModelId: string;
+  selectedModelId: string | null;
+  action: PolicyDecision["action"];
+  category: PolicyDecision["category"];
+  complexityScore: number;
+  workRelated: boolean;
+  estimatedRequestedCostUsd: number;
+  estimatedRoutedCostUsd: number;
+  savingsUsd: number;
+  budgetRemainingUsd: number;
+  reasons: string[];
+  createdAt: Date;
+};
+
 export function toModelProfile(model: DbModelProfile): ModelProfile {
   return {
     ...model,
@@ -67,5 +110,45 @@ export function toEvalResult(result: DbEvalResult): EvalResult {
     totalCostUsd: result.totalCostUsd,
     rubricScores: result.rubricScores as Record<string, number>,
     createdAt: result.createdAt.toISOString(),
+  };
+}
+
+export function toTeam(team: DbTeam): Team {
+  return {
+    id: team.id,
+    name: team.name,
+    monthlyBudgetUsd: team.monthlyBudgetUsd,
+    currentSpendUsd: team.currentSpendUsd,
+  };
+}
+
+export function toAppUser(user: DbAppUser): AppUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    teamId: user.teamId,
+  };
+}
+
+export function toPolicyDecision(decision: DbPolicyDecision): PolicyDecision {
+  return {
+    id: decision.id,
+    promptId: decision.promptId,
+    userId: decision.userId,
+    teamId: decision.teamId,
+    requestedModelId: decision.requestedModelId,
+    selectedModelId: decision.selectedModelId,
+    action: decision.action,
+    category: decision.category,
+    complexityScore: decision.complexityScore,
+    workRelated: decision.workRelated,
+    estimatedRequestedCostUsd: decision.estimatedRequestedCostUsd,
+    estimatedRoutedCostUsd: decision.estimatedRoutedCostUsd,
+    savingsUsd: decision.savingsUsd,
+    budgetRemainingUsd: decision.budgetRemainingUsd,
+    reasons: decision.reasons,
+    createdAt: decision.createdAt.toISOString(),
   };
 }

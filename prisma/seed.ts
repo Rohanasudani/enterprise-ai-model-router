@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { models, promptCases, seedRunHistory } from "../src/lib/data";
+import { models, promptCases, seedRunHistory, teams, users } from "../src/lib/data";
 import { defaultRouterWeights } from "../src/lib/router";
 
 const prisma = new PrismaClient();
@@ -57,6 +57,41 @@ async function main() {
         expectedOutput: prompt.expectedOutput,
         prompt: prompt.prompt,
         rubric: prompt.rubric,
+      },
+    });
+  }
+
+  for (const team of teams) {
+    await prisma.team.upsert({
+      where: { id: team.id },
+      update: {
+        name: team.name,
+        monthlyBudgetUsd: team.monthlyBudgetUsd,
+        currentSpendUsd: team.currentSpendUsd,
+      },
+      create: {
+        id: team.id,
+        name: team.name,
+        monthlyBudgetUsd: team.monthlyBudgetUsd,
+        currentSpendUsd: team.currentSpendUsd,
+      },
+    });
+  }
+
+  for (const user of users) {
+    await prisma.appUser.upsert({
+      where: { email: user.email },
+      update: {
+        name: user.name,
+        role: user.role,
+        teamId: user.teamId,
+      },
+      create: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        teamId: user.teamId,
       },
     });
   }

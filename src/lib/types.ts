@@ -2,6 +2,17 @@ export type TaskType = "coding" | "summarization" | "reasoning" | "support";
 
 export type EvalMode = "mock" | "live_openai";
 
+export type PolicyAction = "allow" | "block" | "downgrade" | "escalate";
+
+export type RequestCategory =
+  | "work_coding"
+  | "work_support"
+  | "work_summary"
+  | "business_reasoning"
+  | "personal"
+  | "sensitive"
+  | "unknown";
+
 export type ModelProfile = {
   id: string;
   name: string;
@@ -60,14 +71,55 @@ export type RouterDecision = {
   reasons: string[];
 };
 
+export type Team = {
+  id: string;
+  name: string;
+  monthlyBudgetUsd: number;
+  currentSpendUsd: number;
+};
+
+export type AppUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  teamId: string;
+};
+
+export type PolicyDecision = {
+  id: string;
+  promptId: string;
+  userId: string;
+  teamId: string;
+  requestedModelId: string;
+  selectedModelId: string | null;
+  action: PolicyAction;
+  category: RequestCategory;
+  complexityScore: number;
+  workRelated: boolean;
+  estimatedRequestedCostUsd: number;
+  estimatedRoutedCostUsd: number;
+  savingsUsd: number;
+  budgetRemainingUsd: number;
+  reasons: string[];
+  createdAt: string;
+};
+
 export type BootstrapPayload = {
   models: ModelProfile[];
   promptCases: PromptCase[];
   recentResults: EvalResult[];
+  teams: Team[];
+  users: AppUser[];
+  recentPolicyDecisions: PolicyDecision[];
 };
 
 export type EvalRunPayload = {
   results: EvalResult[];
   decision: RouterDecision;
   mode: EvalMode;
+};
+
+export type PolicyDecisionPayload = {
+  decision: PolicyDecision;
 };
