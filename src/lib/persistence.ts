@@ -41,6 +41,10 @@ type DbEvalResult = {
   promptId: string;
   output: string;
   score: number;
+  scoreSource: EvalResult["scoreSource"];
+  judgeModelId: string | null;
+  judgeExplanation: string | null;
+  judgedAt: Date | null;
   latencyMs: number;
   inputTokens: number;
   outputTokens: number;
@@ -104,6 +108,10 @@ export function toEvalResult(result: DbEvalResult): EvalResult {
     promptId: result.promptId,
     output: result.output,
     score: result.score,
+    scoreSource: result.scoreSource,
+    judgeModelId: result.judgeModelId,
+    judgeExplanation: result.judgeExplanation,
+    judgedAt: result.judgedAt?.toISOString() ?? null,
     latencyMs: result.latencyMs,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,

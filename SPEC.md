@@ -14,12 +14,13 @@ Build a resume-quality platform that compares LLMs on quality, latency, token co
 - Router recommendation engine that balances quality, cost, latency, context needs, and task-specific fit.
 - Enterprise policy engine that classifies requests and decides whether to allow, block, downgrade, or escalate model access.
 - Savings report API with JSON and CSV exports.
+- LLM-as-judge scoring that updates eval results with rubric scores, judge explanation, judge model, and score source.
 - Dashboard with run history, model comparison, score breakdowns, and a readable "why this model" explanation.
 
 ## Future Milestones
 
 - Provider adapters for Anthropic, Gemini, Groq, and Together.
-- LLM-as-judge scoring with reusable rubric templates.
+- Reusable judge rubric templates and calibration sets.
 - PDF export for reproducible quality/cost reports.
 - Auth, teams, shared datasets, and scheduled regression evals.
 

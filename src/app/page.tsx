@@ -16,6 +16,7 @@ import type {
   EvalMode,
   EvalResult,
   EvalRunPayload,
+  JudgeResultsPayload,
   ModelProfile,
   PolicyDecision,
   PolicyDecisionPayload,
@@ -54,8 +55,10 @@ export default function Home() {
   const [dataSource, setDataSource] = useState<"seed" | "database">("seed");
   const [evalMode, setEvalMode] = useState<EvalMode>("mock");
   const [isRunning, setIsRunning] = useState(false);
+  const [isJudging, setIsJudging] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [runMessage, setRunMessage] = useState("Ready to run model comparison.");
+  const [judgeMessage, setJudgeMessage] = useState("Run an eval, then judge the saved outputs.");
   const [policyMessage, setPolicyMessage] = useState("Ready to route enterprise request.");
 
   const selectedPrompt = promptCases.find((prompt) => prompt.id === selectedPromptId) ?? promptCases[0] ?? seedPromptCases[0];
@@ -205,6 +208,40 @@ export default function Home() {
     }
   }
 
+  async function judgeLatestResults() {
+    setIsJudging(true);
+    setJudgeMessage("Judging latest saved outputs against the rubric...");
+    try {
+      const response = await fetch("/api/judge-results", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resultIds: latestResults.map((result) => result.id),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorPayload?.error ?? "Judge scoring failed");
+      }
+
+      const payload = (await response.json()) as JudgeResultsPayload;
+      setLatestResults((current) =>
+        current.map((result) => payload.results.find((judged) => judged.id === result.id) ?? result),
+      );
+      setHistory((current) =>
+        current.map((result) => payload.results.find((judged) => judged.id === result.id) ?? result),
+      );
+      setJudgeMessage("LLM-as-judge scores saved to PostgreSQL.");
+    } catch (error) {
+      setJudgeMessage(error instanceof Error ? error.message : "Judge scoring failed.");
+    } finally {
+      setIsJudging(false);
+    }
+  }
+
   function updateWeight(key: keyof RouterWeights, value: number) {
     setWeights((current) => ({
       ...current,
@@ -228,6 +265,9 @@ export default function Home() {
             <span className="status-pill">{evalMode === "live_openai" ? "Live OpenAI mode" : "Mock mode"}</span>
             <span className="status-pill">{models.length} models</span>
             <span className="status-pill">{promptCases.length} prompt cases</span>
+            <button className="secondary-button" onClick={judgeLatestResults} disabled={isJudging}>
+              {isJudging ? "Judging..." : "Judge Latest"}
+            </button>
             <button className="primary-button" onClick={runEval} disabled={isRunning}>
               {isRunning ? "Running..." : "Run Eval"}
             </button>
@@ -283,6 +323,7 @@ export default function Home() {
                   </button>
                 </div>
                 <p className="helper-text">{runMessage}</p>
+                <p className="helper-text">{judgeMessage}</p>
               </div>
 
               <div className="control-group">
@@ -476,6 +517,7 @@ export default function Home() {
                       <tr>
                         <th>Model</th>
                         <th>Quality</th>
+                        <th>Score Source</th>
                         <th>Latency</th>
                         <th>Cost</th>
                         <th>Context</th>
@@ -496,6 +538,11 @@ export default function Home() {
                               <div className="bar-track">
                                 <div className="bar-fill" style={{ width: percent(result.score) }} />
                               </div>
+                            </td>
+                            <td>
+                              <span className={`source-badge ${result.scoreSource}`}>
+                                {result.scoreSource === "llm_judge" ? "LLM judge" : "heuristic"}
+                              </span>
                             </td>
                             <td>{result.latencyMs.toLocaleString()} ms</td>
                             <td>{currency(result.totalCostUsd)}</td>
@@ -541,6 +588,9 @@ export default function Home() {
                   <div>
                     <p className="panel-title">Winning Output</p>
                     <pre className="output-box mono">{winnerResult.output}</pre>
+                    {winnerResult.judgeExplanation ? (
+                      <p className="judge-note">{winnerResult.judgeExplanation}</p>
+                    ) : null}
                   </div>
                 </div>
               </div>

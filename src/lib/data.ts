@@ -273,6 +273,10 @@ export const seedRunHistory: EvalResult[] = [
     output:
       "The likely bug is a skew calculation that allows refresh tokens past exp when skew is negative. Clamp skew to a non-negative tolerance and add tests for expired, valid, and boundary tokens.",
     score: 91,
+    scoreSource: "heuristic",
+    judgeModelId: null,
+    judgeExplanation: null,
+    judgedAt: null,
     latencyMs: 1910,
     inputTokens: 1850,
     outputTokens: 420,
@@ -291,6 +295,10 @@ export const seedRunHistory: EvalResult[] = [
     output:
       "Customer impact was limited to delayed report generation. Root cause was a queue worker deployment mismatch. Mitigation was rollback and replay. Follow-up actions include deploy checks and queue depth alerts.",
     score: 86,
+    scoreSource: "heuristic",
+    judgeModelId: null,
+    judgeExplanation: null,
+    judgedAt: null,
     latencyMs: 810,
     inputTokens: 4200,
     outputTokens: 240,

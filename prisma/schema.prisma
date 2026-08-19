@@ -19,6 +19,11 @@ enum EvalMode {
   live_openai
 }
 
+enum ScoreSource {
+  heuristic
+  llm_judge
+}
+
 enum PolicyAction {
   allow
   block
@@ -118,6 +123,10 @@ model EvalResult {
   promptId     String
   output       String
   score        Int
+  scoreSource  ScoreSource  @default(heuristic)
+  judgeModelId String?
+  judgeExplanation String?
+  judgedAt     DateTime?
   latencyMs    Int
   inputTokens  Int
   outputTokens Int

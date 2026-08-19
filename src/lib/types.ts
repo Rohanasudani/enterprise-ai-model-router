@@ -2,6 +2,8 @@ export type TaskType = "coding" | "summarization" | "reasoning" | "support";
 
 export type EvalMode = "mock" | "live_openai";
 
+export type ScoreSource = "heuristic" | "llm_judge";
+
 export type PolicyAction = "allow" | "block" | "downgrade" | "escalate";
 
 export type RequestCategory =
@@ -50,6 +52,10 @@ export type EvalResult = {
   promptId: string;
   output: string;
   score: number;
+  scoreSource: ScoreSource;
+  judgeModelId: string | null;
+  judgeExplanation: string | null;
+  judgedAt: string | null;
   latencyMs: number;
   inputTokens: number;
   outputTokens: number;
@@ -122,6 +128,10 @@ export type EvalRunPayload = {
 
 export type PolicyDecisionPayload = {
   decision: PolicyDecision;
+};
+
+export type JudgeResultsPayload = {
+  results: EvalResult[];
 };
 
 export type ActionCounts = Record<PolicyAction, number>;
