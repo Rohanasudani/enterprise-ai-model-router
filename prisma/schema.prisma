@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskType {
+  coding
+  summarization
+  reasoning
+  support
+}
+
+model ModelProfile {
+  id                String       @id
+  name              String
+  provider          String
+  contextWindow     Int
+  inputCostPerMTok  Float
+  outputCostPerMTok Float
+  medianLatencyMs   Int
+  qualityScore      Int
+  taskScores         Json
+  strengths         String[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  evalResults       EvalResult[]
+
+  @@index([provider])
+}
+
+model PromptCase {
+  id             String       @id
+  dataset        String
+  title          String
+  taskType       TaskType
+  difficulty     Int
+  inputTokens    Int
+  expectedOutput String
+  prompt         String
+  rubric         Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  evalResults    EvalResult[]
+
+  @@index([dataset])
+  @@index([taskType])
+}
+
+model EvalRun {
+  id             String           @id @default(cuid())
+  promptId       String
+  weights        Json
+  createdAt      DateTime         @default(now())
+  results        EvalResult[]
+  routerDecision RouterDecision?
+
+  @@index([promptId])
+  @@index([createdAt])
+}
+
+model EvalResult {
+  id           String       @id @default(cuid())
+  evalRunId    String
+  modelId      String
+  promptId     String
+  output       String
+  score        Int
+  latencyMs    Int
+  inputTokens  Int
+  outputTokens Int
+  totalCostUsd Float
+  rubricScores Json
+  createdAt    DateTime     @default(now())
+  evalRun      EvalRun      @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+  model        ModelProfile @relation(fields: [modelId], references: [id])
+  prompt       PromptCase   @relation(fields: [promptId], references: [id])
+
+  @@index([evalRunId])
+  @@index([modelId])
+  @@index([promptId])
+}
+
+model RouterDecision {
+  id          String   @id @default(cuid())
+  evalRunId   String   @unique
+  modelId     String
+  routerScore Int
+  reasons     String[]
+  createdAt   DateTime @default(now())
+  evalRun     EvalRun  @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+
+  @@index([modelId])
+}
