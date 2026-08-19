@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { runMockEval } from "@/lib/mockEval";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
+import { runOpenAIEval } from "@/lib/providers/openai";
 import { prisma } from "@/lib/prisma";
 import { defaultRouterWeights, recommendModel } from "@/lib/router";
-import type { RouterWeights } from "@/lib/types";
+import type { EvalMode, RouterWeights } from "@/lib/types";
 
 type EvalRunRequest = {
   promptId?: string;
+  mode?: EvalMode;
   weights?: Partial<RouterWeights>;
 };
 
@@ -37,12 +39,26 @@ export async function POST(request: Request) {
     ...defaultRouterWeights,
     ...body.weights,
   };
-  const transientResults = runMockEval(prompt, modelProfiles);
+  const mode: EvalMode = body.mode === "live_openai" ? "live_openai" : "mock";
+
+  if (mode === "live_openai" && !process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 });
+  }
+
+  let transientResults;
+  try {
+    transientResults = mode === "live_openai" ? await runOpenAIEval(prompt, modelProfiles) : runMockEval(prompt, modelProfiles);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Live provider request failed";
+    const status = message.includes("quota") ? 402 : 502;
+    return NextResponse.json({ error: message }, { status });
+  }
   const decision = recommendModel(prompt, transientResults, weights, modelProfiles);
 
   const evalRun = await prisma.evalRun.create({
     data: {
       promptId,
+      mode,
       weights,
       results: {
         create: transientResults.map((result) => ({
@@ -84,5 +100,6 @@ export async function POST(request: Request) {
           reasons: evalRun.routerDecision.reasons,
         }
       : decision,
+    mode,
   });
 }

@@ -1,5 +1,7 @@
 export type TaskType = "coding" | "summarization" | "reasoning" | "support";
 
+export type EvalMode = "mock" | "live_openai";
+
 export type ModelProfile = {
   id: string;
   name: string;
@@ -67,4 +69,5 @@ export type BootstrapPayload = {
 export type EvalRunPayload = {
   results: EvalResult[];
   decision: RouterDecision;
+  mode: EvalMode;
 };

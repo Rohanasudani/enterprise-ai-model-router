@@ -14,6 +14,11 @@ enum TaskType {
   support
 }
 
+enum EvalMode {
+  mock
+  live_openai
+}
+
 model ModelProfile {
   id                String       @id
   name              String
@@ -53,6 +58,7 @@ model PromptCase {
 model EvalRun {
   id             String           @id @default(cuid())
   promptId       String
+  mode           EvalMode         @default(mock)
   weights        Json
   createdAt      DateTime         @default(now())
   results        EvalResult[]

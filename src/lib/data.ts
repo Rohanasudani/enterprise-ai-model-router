@@ -2,6 +2,40 @@ import type { EvalResult, ModelProfile, PromptCase } from "./types";
 
 export const models: ModelProfile[] = [
   {
+    id: "gpt-5.6-terra",
+    name: "GPT-5.6 Terra",
+    provider: "OpenAI",
+    contextWindow: 1050000,
+    inputCostPerMTok: 2,
+    outputCostPerMTok: 12,
+    medianLatencyMs: 1800,
+    qualityScore: 93,
+    taskScores: {
+      coding: 94,
+      summarization: 91,
+      reasoning: 93,
+      support: 90,
+    },
+    strengths: ["live evals", "balanced intelligence", "large context"],
+  },
+  {
+    id: "gpt-5.6-luna",
+    name: "GPT-5.6 Luna",
+    provider: "OpenAI",
+    contextWindow: 1050000,
+    inputCostPerMTok: 0.2,
+    outputCostPerMTok: 1.2,
+    medianLatencyMs: 950,
+    qualityScore: 86,
+    taskScores: {
+      coding: 84,
+      summarization: 88,
+      reasoning: 84,
+      support: 87,
+    },
+    strengths: ["low cost", "fast live evals", "large context"],
+  },
+  {
     id: "frontier-pro",
     name: "Frontier Pro",
     provider: "OpenAI",

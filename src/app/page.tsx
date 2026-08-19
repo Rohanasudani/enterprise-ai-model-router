@@ -4,7 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { models as seedModels, promptCases as seedPromptCases, seedRunHistory } from "@/lib/data";
 import { runMockEval } from "@/lib/mockEval";
 import { defaultRouterWeights, recommendModel } from "@/lib/router";
-import type { BootstrapPayload, EvalResult, EvalRunPayload, ModelProfile, PromptCase, RouterWeights } from "@/lib/types";
+import type {
+  BootstrapPayload,
+  EvalMode,
+  EvalResult,
+  EvalRunPayload,
+  ModelProfile,
+  PromptCase,
+  RouterWeights,
+} from "@/lib/types";
 
 function currency(value: number) {
   return `$${value.toFixed(5)}`;
@@ -22,7 +30,9 @@ export default function Home() {
   const [latestResults, setLatestResults] = useState<EvalResult[]>(() => runMockEval(seedPromptCases[0], seedModels));
   const [history, setHistory] = useState<EvalResult[]>(seedRunHistory);
   const [dataSource, setDataSource] = useState<"seed" | "database">("seed");
+  const [evalMode, setEvalMode] = useState<EvalMode>("mock");
   const [isRunning, setIsRunning] = useState(false);
+  const [runMessage, setRunMessage] = useState("Ready to run model comparison.");
 
   const selectedPrompt = promptCases.find((prompt) => prompt.id === selectedPromptId) ?? promptCases[0] ?? seedPromptCases[0];
   const decision = useMemo(
@@ -69,6 +79,7 @@ export default function Home() {
 
   async function runEval() {
     setIsRunning(true);
+    setRunMessage(evalMode === "live_openai" ? "Running live OpenAI eval..." : "Running mock eval...");
     try {
       const response = await fetch("/api/eval-runs", {
         method: "POST",
@@ -77,23 +88,27 @@ export default function Home() {
         },
         body: JSON.stringify({
           promptId: selectedPrompt.id,
+          mode: evalMode,
           weights,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Eval API unavailable");
+        const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorPayload?.error ?? "Eval API unavailable");
       }
 
       const payload = (await response.json()) as EvalRunPayload;
       setLatestResults(payload.results);
       setHistory((current) => [...payload.results, ...current].slice(0, 10));
       setDataSource("database");
-    } catch {
+      setRunMessage(payload.mode === "live_openai" ? "Live OpenAI eval saved to PostgreSQL." : "Mock eval saved to PostgreSQL.");
+    } catch (error) {
       const nextResults = runMockEval(selectedPrompt, models);
       setLatestResults(nextResults);
       setHistory((current) => [...nextResults, ...current].slice(0, 10));
       setDataSource("seed");
+      setRunMessage(error instanceof Error ? `${error.message}. Showing mock fallback.` : "Eval failed. Showing mock fallback.");
     } finally {
       setIsRunning(false);
     }
@@ -119,7 +134,7 @@ export default function Home() {
           </div>
           <div className="top-actions">
             <span className="status-pill">{dataSource === "database" ? "PostgreSQL connected" : "Seed fallback"}</span>
-            <span className="status-pill">Mock providers active</span>
+            <span className="status-pill">{evalMode === "live_openai" ? "Live OpenAI mode" : "Mock mode"}</span>
             <span className="status-pill">{models.length} models</span>
             <span className="status-pill">{promptCases.length} prompt cases</span>
             <button className="primary-button" onClick={runEval} disabled={isRunning}>
@@ -156,6 +171,27 @@ export default function Home() {
               <div className="control-group">
                 <label htmlFor="prompt-body">Prompt</label>
                 <textarea className="textarea" id="prompt-body" value={selectedPrompt.prompt} readOnly />
+              </div>
+
+              <div className="control-group">
+                <label>Provider Mode</label>
+                <div className="segmented-control" aria-label="Provider mode">
+                  <button
+                    className={evalMode === "mock" ? "segment active" : "segment"}
+                    type="button"
+                    onClick={() => setEvalMode("mock")}
+                  >
+                    Mock
+                  </button>
+                  <button
+                    className={evalMode === "live_openai" ? "segment active" : "segment"}
+                    type="button"
+                    onClick={() => setEvalMode("live_openai")}
+                  >
+                    Live OpenAI
+                  </button>
+                </div>
+                <p className="helper-text">{runMessage}</p>
               </div>
 
               <div className="control-group">
@@ -248,9 +284,7 @@ export default function Home() {
               <div className="panel">
                 <div className="panel-header">
                   <p className="panel-title">Model Comparison</p>
-                  <p className="panel-subtitle">
-                    Average quality for this run: {averageQuality.toFixed(1)}/100
-                  </p>
+                  <p className="panel-subtitle">Average quality for this run: {averageQuality.toFixed(1)}/100</p>
                 </div>
                 <div className="table-wrap">
                   <table className="table">
@@ -354,7 +388,7 @@ export default function Home() {
               <div className="panel">
                 <div className="panel-header">
                   <p className="panel-title">Recent Runs</p>
-                  <p className="panel-subtitle">Last 10 mocked eval results across model and prompt cases.</p>
+                  <p className="panel-subtitle">Last 10 eval results across model and prompt cases.</p>
                 </div>
                 <div className="panel-body">
                   {history.slice(0, 6).map((run) => {

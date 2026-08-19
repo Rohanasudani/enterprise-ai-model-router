@@ -130,6 +130,11 @@ button {
   color: var(--ink);
 }
 
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .content {
   max-width: 1440px;
   margin: 0 auto;
@@ -216,6 +221,38 @@ button {
   font-weight: 800;
   color: var(--accent-strong);
   text-align: right;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 4px;
+}
+
+.segment {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  min-height: 36px;
+  font-weight: 800;
+}
+
+.segment.active {
+  background: #fff;
+  color: var(--accent-strong);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.1);
+}
+
+.helper-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .metric-strip {

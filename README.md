@@ -8,6 +8,7 @@ A Next.js and TypeScript MVP for comparing LLMs by task quality, latency, contex
 - Prompt dataset with rubrics and difficulty
 - PostgreSQL persistence through Prisma
 - API-backed mock eval runner, no LLM API keys required
+- Live OpenAI eval mode through the Responses API
 - Cost, latency, token, and quality scoring
 - Router recommendation with explanation
 - Run history and model comparison dashboard
@@ -26,6 +27,22 @@ npm run dev
 Open `http://localhost:3000`.
 
 If you do not have Docker installed, create a PostgreSQL database locally or in Neon/Supabase and set `DATABASE_URL` in `.env`.
+
+## Live OpenAI Mode
+
+Add an API key to `.env`:
+
+```bash
+OPENAI_API_KEY="your_project_key_here"
+```
+
+Then use the dashboard's provider mode switch:
+
+```text
+Mock | Live OpenAI
+```
+
+Live mode calls OpenAI models, records latency, reads token usage from the API response, estimates cost from the model registry, and stores the eval run in PostgreSQL.
 
 ## Database Scripts
 
