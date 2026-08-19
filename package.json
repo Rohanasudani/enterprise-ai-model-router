@@ -1,6 +1,7 @@
 {
   "name": "ai-model-router",
   "version": "0.1.0",
+  "description": "Enterprise LLM routing and eval platform with policy-aware model selection, budgets, and savings reports.",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
