@@ -149,8 +149,6 @@ Planned:
 - PDF report generation
 - prompt/version diffing
 
-## Resume Summary
+## Project Summary
 
 Built an enterprise LLM routing and evaluation platform in Next.js, TypeScript, PostgreSQL, and Prisma that selects models by quality, cost, latency, context needs, task type, user budget, and policy constraints. Added mock/live provider modes, OpenAI integration, LLM-as-judge rubric scoring, prompt dataset management, policy audit history, and reproducible savings reports.
-
-Resume bullet options: [docs/resume-bullets.md](docs/resume-bullets.md)

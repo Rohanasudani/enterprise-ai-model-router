@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a resume-quality AI infrastructure platform that routes LLM requests by quality, latency, token cost, context fit, task type, company policy, and team budget.
+Build a production-oriented AI infrastructure platform that routes LLM requests by quality, latency, token cost, context fit, task type, company policy, and team budget.
 
 The product is designed as an enterprise control plane for AI usage: a company can decide whether a developer request should use a premium model, a cheaper model, a live eval flow, or be blocked because it violates usage policy.
 
@@ -28,7 +28,7 @@ The product is designed as an enterprise control plane for AI usage: a company c
 - Prompt and rubric versioning.
 - Deployment with managed PostgreSQL.
 
-## Resume Story
+## Technical Positioning
 
 This project demonstrates production-oriented AI engineering: model selection, eval discipline, cost and latency tradeoffs, enterprise policy enforcement, reproducibility, and explainable routing.
 
