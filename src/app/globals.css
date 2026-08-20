@@ -409,6 +409,17 @@ button {
   padding-left: 10px;
 }
 
+.notice-banner {
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 10px 12px;
+}
+
 .action-badge,
 .mini-action {
   display: inline-flex;

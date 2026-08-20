@@ -113,6 +113,16 @@ export default function Home() {
   const policySelectedModel = policyDecision
     ? models.find((model) => model.id === policyDecision.selectedModelId)
     : undefined;
+  const policyDecisionUser = policyDecision ? users.find((user) => user.id === policyDecision.userId) : undefined;
+  const policyDecisionTeam = policyDecision ? teams.find((team) => team.id === policyDecision.teamId) : undefined;
+  const policyDecisionRequestedModel = policyDecision
+    ? models.find((model) => model.id === policyDecision.requestedModelId)
+    : undefined;
+  const hasUnsavedPolicyInputs = policyDecision
+    ? policyDecision.promptId !== selectedPrompt.id ||
+      policyDecision.userId !== selectedUser.id ||
+      policyDecision.requestedModelId !== requestedModelId
+    : false;
   const decision = useMemo(
     () => recommendModel(selectedPrompt, latestResults, weights, models),
     [latestResults, selectedPrompt, weights, models],
@@ -139,6 +149,20 @@ export default function Home() {
   function updateDemoAdminKey(value: string) {
     setDemoAdminKey(value);
     window.localStorage.setItem("ai-router-demo-admin-key", value);
+  }
+
+  function updatePolicyUser(userId: string) {
+    setSelectedUserId(userId);
+    if (policyDecision) {
+      setPolicyMessage("Requester changed. Click Route Request to create a new policy decision.");
+    }
+  }
+
+  function updateRequestedModel(modelId: string) {
+    setRequestedModelId(modelId);
+    if (policyDecision) {
+      setPolicyMessage("Requested model changed. Click Route Request to create a new policy decision.");
+    }
   }
 
   async function refreshSavingsReport() {
@@ -499,7 +523,7 @@ export default function Home() {
                   className="select"
                   id="policy-user"
                   value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
+                  onChange={(event) => updatePolicyUser(event.target.value)}
                 >
                   {users.map((user) => {
                     const team = teams.find((candidate) => candidate.id === user.teamId);
@@ -518,7 +542,7 @@ export default function Home() {
                   className="select"
                   id="requested-model"
                   value={requestedModelId}
-                  onChange={(event) => setRequestedModelId(event.target.value)}
+                  onChange={(event) => updateRequestedModel(event.target.value)}
                 >
                   {models.map((model) => (
                     <option key={model.id} value={model.id}>
@@ -602,14 +626,14 @@ export default function Home() {
                 <div className="metric-note">{savingsReport?.savingsPercent ?? 0}% saved by policy</div>
               </div>
               <div className="metric">
-                <div className="metric-label">Recommended</div>
+                <div className="metric-label">Recommended Preview</div>
                 <div className="metric-value">{winner.name}</div>
-                <div className="metric-note">{winner.provider}</div>
+                <div className="metric-note">updates as weights change</div>
               </div>
               <div className="metric">
-                <div className="metric-label">Router Score</div>
+                <div className="metric-label">Router Preview</div>
                 <div className="metric-value">{decision.routerScore}</div>
-                <div className="metric-note">weighted decision score</div>
+                <div className="metric-note">not persisted until Run Eval</div>
               </div>
               <div className="metric">
                 <div className="metric-label">Best Cost</div>
@@ -855,8 +879,10 @@ export default function Home() {
 
               <div className="panel">
                 <div className="panel-header">
-                  <p className="panel-title">Router Decision</p>
-                  <p className="panel-subtitle">Explainable selection based on your current weights.</p>
+                  <p className="panel-title">Router Preview</p>
+                  <p className="panel-subtitle">
+                    Updates instantly from the current weights. Click Run Eval to refresh model outputs and save a run.
+                  </p>
                 </div>
                 <div className="panel-body recommendation">
                   <div className="recommendation-head">
@@ -886,12 +912,21 @@ export default function Home() {
 
               <div className="panel">
                 <div className="panel-header">
-                  <p className="panel-title">Enterprise Policy Decision</p>
+                  <p className="panel-title">Saved Policy Decision</p>
                   <p className="panel-subtitle">
-                    {selectedUser.name} · {selectedTeam.name} · {requestedModel.name} requested
+                    {policyDecision
+                      ? `${policyDecisionUser?.name ?? "Requester"} · ${policyDecisionTeam?.name ?? "Team"} · ${
+                          policyDecisionRequestedModel?.name ?? "Requested model"
+                        } requested`
+                      : `${selectedUser.name} · ${selectedTeam.name} · ${requestedModel.name} ready to route`}
                   </p>
                 </div>
                 <div className="panel-body recommendation">
+                  {hasUnsavedPolicyInputs ? (
+                    <div className="notice-banner">
+                      Controls changed after this decision. Click Route Request to update the audit result.
+                    </div>
+                  ) : null}
                   {policyDecision ? (
                     <>
                       <div className="recommendation-head">
