@@ -4,6 +4,8 @@ A full-stack AI infrastructure project that routes LLM requests by task complexi
 
 This is not an OpenRouter clone. It is a company-side governance and evaluation layer for deciding when a request should use a premium model, a cheaper model, a live evaluation flow, or be blocked as policy-violating usage.
 
+Live demo: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
+
 ## Highlights
 
 - Policy-aware model routing with `allow`, `block`, `downgrade`, and `escalate` decisions
@@ -37,6 +39,8 @@ The main workflow:
 - OpenAI API
 - Docker Compose
 - ESLint
+- Vercel
+- Neon Postgres
 
 ## Architecture
 
@@ -71,6 +75,15 @@ The app is designed to be safe as a public mock-mode demo. Live provider calls a
 - Public production mock evals can return preview results without writing to the database.
 
 More detail: [docs/production-safety.md](docs/production-safety.md)
+
+## Deployment
+
+The public demo is deployed on Vercel with Neon Postgres:
+
+- Production URL: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
+- Public mode: mock evals only
+- Live OpenAI mode: disabled by `LIVE_MODE_ENABLED=false`
+- Production writes and live actions: protected by `DEMO_ADMIN_KEY`
 
 ## Data Model
 

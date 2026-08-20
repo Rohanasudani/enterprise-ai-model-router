@@ -53,6 +53,12 @@ OPENAI_API_KEY=""
 DEMO_ADMIN_KEY="long_random_value"
 ```
 
+Current public demo:
+
+```text
+https://enterprise-ai-model-router.vercel.app
+```
+
 For a private demo with live model calls:
 
 ```bash
