@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkRateLimit, requireLiveModeAccess, requireProductionAdminKey } from "@/lib/deploymentGuards";
 import { runMockEval } from "@/lib/mockEval";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
 import { runOpenAIEval } from "@/lib/providers/openai";
@@ -15,6 +16,15 @@ type EvalRunRequest = {
 export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) {
     return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
+  }
+
+  const rateLimit = checkRateLimit(request, {
+    route: "eval-runs",
+    limit: 12,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
   }
 
   const body = (await request.json()) as EvalRunRequest;
@@ -41,6 +51,13 @@ export async function POST(request: Request) {
   };
   const mode: EvalMode = body.mode === "live_openai" ? "live_openai" : "mock";
 
+  if (mode === "live_openai") {
+    const liveModeAccess = requireLiveModeAccess(request);
+    if (!liveModeAccess.ok) {
+      return NextResponse.json({ error: liveModeAccess.error }, { status: liveModeAccess.status });
+    }
+  }
+
   if (mode === "live_openai" && !process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 });
   }
@@ -54,6 +71,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status });
   }
   const decision = recommendModel(prompt, transientResults, weights, modelProfiles);
+
+  const persistenceAccess = requireProductionAdminKey(request, "Eval result persistence");
+  if (!persistenceAccess.ok) {
+    return NextResponse.json({
+      results: transientResults,
+      decision,
+      mode,
+      persisted: false,
+    });
+  }
 
   const evalRun = await prisma.evalRun.create({
     data: {
@@ -105,5 +132,6 @@ export async function POST(request: Request) {
         }
       : decision,
     mode,
+    persisted: true,
   });
 }

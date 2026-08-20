@@ -124,10 +124,12 @@ export type EvalRunPayload = {
   results: EvalResult[];
   decision: RouterDecision;
   mode: EvalMode;
+  persisted?: boolean;
 };
 
 export type PolicyDecisionPayload = {
   decision: PolicyDecision;
+  persisted?: boolean;
 };
 
 export type JudgeResultsPayload = {

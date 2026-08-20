@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkRateLimit, MAX_JUDGE_RESULT_IDS, requireLiveModeAccess } from "@/lib/deploymentGuards";
 import { judgeEvalResult } from "@/lib/providers/judge";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +14,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
   }
 
+  const rateLimit = checkRateLimit(request, {
+    route: "judge-results",
+    limit: 6,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
+  }
+
+  const liveModeAccess = requireLiveModeAccess(request);
+  if (!liveModeAccess.ok) {
+    return NextResponse.json({ error: liveModeAccess.error }, { status: liveModeAccess.status });
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 });
   }
@@ -23,6 +38,13 @@ export async function POST(request: Request) {
 
   if (resultIds.length === 0) {
     return NextResponse.json({ error: "At least one eval result ID is required" }, { status: 400 });
+  }
+
+  if (resultIds.length > MAX_JUDGE_RESULT_IDS) {
+    return NextResponse.json(
+      { error: `Judge requests are limited to ${MAX_JUDGE_RESULT_IDS} results at a time.` },
+      { status: 400 },
+    );
   }
 
   const resultRecords = await prisma.evalResult.findMany({

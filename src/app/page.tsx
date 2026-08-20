@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   models as seedModels,
   promptCases as seedPromptCases,
@@ -70,6 +70,14 @@ function createBlankPromptCase(): PromptCase {
   };
 }
 
+function getStoredDemoAdminKey() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem("ai-router-demo-admin-key") ?? "";
+}
+
 export default function Home() {
   const [models, setModels] = useState<ModelProfile[]>(seedModels);
   const [promptCases, setPromptCases] = useState<PromptCase[]>(seedPromptCases);
@@ -87,6 +95,8 @@ export default function Home() {
   const [savingsReport, setSavingsReport] = useState<SavingsReport | null>(null);
   const [dataSource, setDataSource] = useState<"seed" | "database">("seed");
   const [evalMode, setEvalMode] = useState<EvalMode>("mock");
+  const [demoAdminKey, setDemoAdminKey] = useState(getStoredDemoAdminKey);
+  const bootstrapAdminKeyRef = useRef(demoAdminKey);
   const [isRunning, setIsRunning] = useState(false);
   const [isJudging, setIsJudging] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
@@ -113,6 +123,24 @@ export default function Home() {
   const bestCost = Math.min(...latestResults.map((result) => result.totalCostUsd));
   const fastestLatency = Math.min(...latestResults.map((result) => result.latencyMs));
 
+  function guardedHeaders() {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const trimmedKey = demoAdminKey.trim();
+
+    if (trimmedKey) {
+      headers["x-demo-admin-key"] = trimmedKey;
+    }
+
+    return headers;
+  }
+
+  function updateDemoAdminKey(value: string) {
+    setDemoAdminKey(value);
+    window.localStorage.setItem("ai-router-demo-admin-key", value);
+  }
+
   async function refreshSavingsReport() {
     try {
       const response = await fetch("/api/reports/savings");
@@ -127,9 +155,12 @@ export default function Home() {
   }
 
   useEffect(() => {
-    async function loadBootstrapData() {
+    async function loadBootstrapData(adminKey: string) {
       try {
-        const response = await fetch("/api/bootstrap");
+        const trimmedKey = adminKey.trim();
+        const response = await fetch("/api/bootstrap", {
+          headers: trimmedKey ? { "x-demo-admin-key": trimmedKey } : undefined,
+        });
         if (!response.ok) {
           throw new Error("Bootstrap API unavailable");
         }
@@ -157,7 +188,7 @@ export default function Home() {
       }
     }
 
-    void loadBootstrapData();
+    void loadBootstrapData(bootstrapAdminKeyRef.current);
   }, []);
 
   function updatePrompt(promptId: string) {
@@ -217,9 +248,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/prompt-cases", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: guardedHeaders(),
         body: JSON.stringify(promptDraft),
       });
 
@@ -253,9 +282,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/policy-decisions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: guardedHeaders(),
         body: JSON.stringify({
           promptId: selectedPrompt.id,
           userId: selectedUser.id,
@@ -271,16 +298,20 @@ export default function Home() {
       const payload = (await response.json()) as PolicyDecisionPayload;
       setPolicyDecision(payload.decision);
       setRecentPolicyDecisions((current) => [payload.decision, ...current].slice(0, 10));
-      setTeams((current) =>
-        current.map((team) =>
-          team.id === payload.decision.teamId
-            ? { ...team, currentSpendUsd: team.currentSpendUsd + payload.decision.estimatedRoutedCostUsd }
-            : team,
-        ),
-      );
-      void refreshSavingsReport();
-      setPolicyMessage("Policy decision saved to audit log.");
-      setDataSource("database");
+      if (payload.persisted === false) {
+        setPolicyMessage("Policy preview generated. Production persistence requires admin access.");
+      } else {
+        setTeams((current) =>
+          current.map((team) =>
+            team.id === payload.decision.teamId
+              ? { ...team, currentSpendUsd: team.currentSpendUsd + payload.decision.estimatedRoutedCostUsd }
+              : team,
+          ),
+        );
+        void refreshSavingsReport();
+        setPolicyMessage("Policy decision saved to audit log.");
+        setDataSource("database");
+      }
     } catch (error) {
       setPolicyMessage(error instanceof Error ? error.message : "Policy route failed.");
     } finally {
@@ -294,9 +325,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/eval-runs", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: guardedHeaders(),
         body: JSON.stringify({
           promptId: selectedPrompt.id,
           mode: evalMode,
@@ -312,8 +341,14 @@ export default function Home() {
       const payload = (await response.json()) as EvalRunPayload;
       setLatestResults(payload.results);
       setHistory((current) => [...payload.results, ...current].slice(0, 10));
-      setDataSource("database");
-      setRunMessage(payload.mode === "live_openai" ? "Live OpenAI eval saved to PostgreSQL." : "Mock eval saved to PostgreSQL.");
+      setDataSource(payload.persisted === false ? "seed" : "database");
+      setRunMessage(
+        payload.persisted === false
+          ? "Mock preview generated. Production persistence requires admin access."
+          : payload.mode === "live_openai"
+            ? "Live OpenAI eval saved to PostgreSQL."
+            : "Mock eval saved to PostgreSQL.",
+      );
     } catch (error) {
       const nextResults = runMockEval(selectedPrompt, models);
       setLatestResults(nextResults);
@@ -331,9 +366,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/judge-results", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: guardedHeaders(),
         body: JSON.stringify({
           resultIds: latestResults.map((result) => result.id),
         }),
@@ -445,6 +478,19 @@ export default function Home() {
                 </div>
                 <p className="helper-text">{runMessage}</p>
                 <p className="helper-text">{judgeMessage}</p>
+              </div>
+
+              <div className="control-group">
+                <label htmlFor="demo-admin-key">Demo Admin Key</label>
+                <input
+                  autoComplete="off"
+                  className="select"
+                  id="demo-admin-key"
+                  placeholder="Required for live/admin actions"
+                  type="password"
+                  value={demoAdminKey}
+                  onChange={(event) => updateDemoAdminKey(event.target.value)}
+                />
               </div>
 
               <div className="control-group">

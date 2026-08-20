@@ -14,6 +14,7 @@ This is not an OpenRouter clone. It is a company-side governance and evaluation 
 - Team budget tracking, estimated savings, and CSV/JSON reports
 - Explainable router decisions with cost, latency, quality, context, and policy reasoning
 - Dashboard for run history, model comparison, policy audits, and savings reporting
+- Production demo safety controls for live calls, protected writes, rate limits, and request size caps
 
 ## Product Demo
 
@@ -59,6 +60,18 @@ flowchart LR
 
 More detail: [docs/architecture.md](docs/architecture.md)
 
+## Production Safety
+
+The app is designed to be safe as a public mock-mode demo. Live provider calls and production persistence are guarded separately:
+
+- `LIVE_MODE_ENABLED=false` disables live OpenAI calls by default.
+- `DEMO_ADMIN_KEY` protects live evals, LLM-as-judge scoring, dataset writes, and production persistence.
+- POST routes use basic per-IP rate limits.
+- Prompt and judge payloads have size caps.
+- Public production mock evals can return preview results without writing to the database.
+
+More detail: [docs/production-safety.md](docs/production-safety.md)
+
 ## Data Model
 
 - `ModelProfile`: provider, model name, context window, pricing, latency, task strengths, and quality scores
@@ -101,6 +114,7 @@ The app works without OpenAI credits in mock mode. Live mode requires a funded O
 npm run dev
 npm run build
 npm run lint
+npm test
 npm run db:migrate
 npm run db:seed
 npm run db:studio

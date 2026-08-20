@@ -18,6 +18,8 @@ The platform combines eval quality, cost controls, latency preferences, context 
 6. Optional LLM-as-judge scoring updates results with rubric scores and explanations.
 7. Reports aggregate run history, spend, savings, and routing decisions.
 
+Production deployments add a guard layer before expensive or mutating actions. Live provider calls require `LIVE_MODE_ENABLED=true` and a valid demo admin key. Public mock evals can return preview results without writing to PostgreSQL.
+
 ## Core Modules
 
 `src/lib/router.ts`
@@ -43,6 +45,10 @@ Builds savings summaries from policy decisions, spend estimates, and team budget
 `src/lib/persistence.ts`
 
 Converts between Prisma records and app-level TypeScript objects so the UI and APIs stay typed.
+
+`src/lib/deploymentGuards.ts`
+
+Centralizes deployment safety controls: live-mode gating, admin-key checks, rate limits, and request size caps.
 
 ## Persistence
 

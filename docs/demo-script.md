@@ -19,7 +19,7 @@ Open `http://localhost:3000`.
 1. Start with the dashboard and explain the problem: companies need to control LLM spend without killing developer productivity.
 2. Show the model registry and point out quality, latency, context, task strengths, and cost metadata.
 3. Run a mock eval to demonstrate the product without requiring API credits.
-4. Switch to live OpenAI mode if `OPENAI_API_KEY` has quota enabled.
+4. Switch to live OpenAI mode only for a private demo with `LIVE_MODE_ENABLED=true`, `OPENAI_API_KEY`, and the demo admin key configured.
 5. Show the run history and compare quality, cost, latency, and token usage.
 6. Click the judge action to show LLM-as-judge scoring and rubric explanations.
 7. Create a new prompt case to show dataset/rubric management.
@@ -34,3 +34,4 @@ Open `http://localhost:3000`.
 - The router is explainable, not a black box.
 - The policy layer makes it enterprise-oriented instead of just a benchmark toy.
 - Historical persistence makes reports reproducible.
+- Production safety controls prevent anonymous visitors from burning provider credits.

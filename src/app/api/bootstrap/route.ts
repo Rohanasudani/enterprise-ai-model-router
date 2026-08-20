@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
+import { requireProductionAdminKey } from "@/lib/deploymentGuards";
 import { prisma } from "@/lib/prisma";
 import { toAppUser, toEvalResult, toModelProfile, toPolicyDecision, toPromptCase, toTeam } from "@/lib/persistence";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!process.env.DATABASE_URL) {
     return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
+  }
+
+  const productionAccess = requireProductionAdminKey(request, "Bootstrap data access");
+  if (!productionAccess.ok) {
+    return NextResponse.json({ error: productionAccess.error }, { status: productionAccess.status });
   }
 
   const [models, promptCases, recentResults, teams, users, recentPolicyDecisions] = await Promise.all([

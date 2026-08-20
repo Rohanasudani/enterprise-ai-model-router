@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkRateLimit, requireProductionAdminKey } from "@/lib/deploymentGuards";
 import { makePolicyDecision } from "@/lib/policyEngine";
 import { toAppUser, toModelProfile, toPolicyDecision, toPromptCase, toTeam } from "@/lib/persistence";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,15 @@ type PolicyDecisionRequest = {
 export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) {
     return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
+  }
+
+  const rateLimit = checkRateLimit(request, {
+    route: "policy-decisions",
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.ok) {
+    return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
   }
 
   const body = (await request.json()) as PolicyDecisionRequest;
@@ -51,6 +61,18 @@ export async function POST(request: Request) {
     requestedModelId: body.requestedModelId,
   });
 
+  const persistenceAccess = requireProductionAdminKey(request, "Policy decision persistence");
+  if (!persistenceAccess.ok) {
+    return NextResponse.json({
+      decision: {
+        ...draft,
+        id: `preview-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      },
+      persisted: false,
+    });
+  }
+
   const [decision] = await prisma.$transaction([
     prisma.policyDecision.create({
       data: draft,
@@ -67,5 +89,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     decision: toPolicyDecision(decision),
+    persisted: true,
   });
 }
