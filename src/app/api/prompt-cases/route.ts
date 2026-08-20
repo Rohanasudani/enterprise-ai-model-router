@@ -4,6 +4,8 @@ import {
   MAX_EXPECTED_OUTPUT_CHARS,
   MAX_PROMPT_CHARS,
   MAX_RUBRIC_CRITERIA,
+  parseJsonBody,
+  requireJsonRequest,
   requireProductionAdminKey,
   validatePromptText,
 } from "@/lib/deploymentGuards";
@@ -64,7 +66,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: productionAccess.error }, { status: productionAccess.status });
   }
 
-  const body = (await request.json()) as PromptCaseRequest;
+  const jsonRequest = requireJsonRequest(request);
+  if (!jsonRequest.ok) {
+    return NextResponse.json({ error: jsonRequest.error }, { status: jsonRequest.status });
+  }
+
+  const parsedBody = await parseJsonBody<PromptCaseRequest>(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status });
+  }
+
+  const body = parsedBody.data;
   const title = String(body.title ?? "").trim();
   const dataset = String(body.dataset ?? "").trim();
   const prompt = String(body.prompt ?? "").trim();
@@ -111,7 +123,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const id = body.id?.trim() || `${slugify(title) || "prompt"}-${Date.now()}`;
+  const id = (typeof body.id === "string" ? body.id.trim() : "") || `${slugify(title) || "prompt"}-${Date.now()}`;
   const promptCase = await prisma.promptCase.upsert({
     where: {
       id,

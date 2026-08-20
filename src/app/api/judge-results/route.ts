@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, MAX_JUDGE_RESULT_IDS, requireLiveModeAccess } from "@/lib/deploymentGuards";
+import {
+  checkRateLimit,
+  MAX_JUDGE_RESULT_IDS,
+  parseJsonBody,
+  requireJsonRequest,
+  requireLiveModeAccess,
+  safeErrorMessage,
+} from "@/lib/deploymentGuards";
 import { judgeEvalResult } from "@/lib/providers/judge";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +39,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 });
   }
 
-  const body = (await request.json()) as JudgeResultsRequest;
+  const jsonRequest = requireJsonRequest(request);
+  if (!jsonRequest.ok) {
+    return NextResponse.json({ error: jsonRequest.error }, { status: jsonRequest.status });
+  }
+
+  const parsedBody = await parseJsonBody<JudgeResultsRequest>(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status });
+  }
+
+  const body = parsedBody.data;
   const resultIds = body.resultIds?.filter(Boolean) ?? [];
   const judgeModelId = body.judgeModelId || process.env.OPENAI_JUDGE_MODEL || "gpt-4.1-mini";
 
@@ -93,7 +110,7 @@ export async function POST(request: Request) {
       judgedResults.push(toEvalResult(updated));
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Judge request failed";
+    const message = safeErrorMessage(error, "Judge request failed.");
     const status = message.includes("quota") ? 402 : 502;
     return NextResponse.json({ error: message }, { status });
   }

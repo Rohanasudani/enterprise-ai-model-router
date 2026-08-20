@@ -34,8 +34,14 @@ The API layer includes:
 - expected-output length caps
 - rubric criterion caps
 - judge batch-size caps
+- JSON content-type checks
+- invalid JSON handling with `400` responses
+- safer production provider error messages
+- HTTP security headers for framing, MIME sniffing, referrer policy, permissions, and baseline CSP
 
 The in-memory limiter is enough for a portfolio deployment. A real multi-instance production deployment should move rate limiting to Redis, Upstash, Vercel KV, Cloudflare, or another shared store.
+
+The CSP is intentionally practical for a Next.js app. It blocks framing and object embedding while still allowing the inline scripts/styles Next needs to render correctly.
 
 ## Recommended Public Deployment
 

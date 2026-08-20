@@ -4,8 +4,11 @@ import {
   checkRateLimit,
   hasValidAdminKey,
   isLiveModeEnabled,
+  parseJsonBody,
+  requireJsonRequest,
   requireLiveModeAccess,
   requireProductionAdminKey,
+  safeErrorMessage,
   validatePromptText,
 } from "./deploymentGuards";
 
@@ -97,4 +100,47 @@ test("prompt text validation caps large inputs", () => {
   if (!result.ok) {
     assert.equal(result.status, 400);
   }
+});
+
+test("JSON request guard rejects non-JSON posts", () => {
+  const request = new Request("https://example.com", {
+    method: "POST",
+    headers: {
+      "content-type": "text/plain",
+    },
+  });
+
+  const result = requireJsonRequest(request);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.status, 415);
+  }
+});
+
+test("JSON parser returns a typed body or a safe 400", async () => {
+  const valid = await parseJsonBody<{ name: string }>(
+    new Request("https://example.com", {
+      method: "POST",
+      body: JSON.stringify({ name: "router" }),
+    }),
+  );
+  assert.deepEqual(valid, { ok: true, data: { name: "router" } });
+
+  const invalid = await parseJsonBody(
+    new Request("https://example.com", {
+      method: "POST",
+      body: "{not-json",
+    }),
+  );
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) {
+    assert.equal(invalid.status, 400);
+  }
+});
+
+test("production error messages avoid leaking raw provider details", () => {
+  process.env.NODE_ENV = "production";
+
+  assert.equal(safeErrorMessage(new Error("upstream stack details"), "Provider failed."), "Provider failed.");
+  assert.equal(safeErrorMessage(new Error("insufficient quota"), "Provider failed."), "Provider quota is unavailable.");
 });

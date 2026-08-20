@@ -17,6 +17,13 @@ type GuardSuccess = {
 
 export type GuardResult = GuardFailure | GuardSuccess;
 
+export type JsonBodyResult<T> =
+  | {
+      ok: true;
+      data: T;
+    }
+  | GuardFailure;
+
 type RateLimitEntry = {
   count: number;
   resetAt: number;
@@ -111,6 +118,49 @@ export function requireProductionAdminKey(request: Request, action: string): Gua
   }
 
   return requireAdminKey(request, action);
+}
+
+export function requireJsonRequest(request: Request): GuardResult {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.toLowerCase().includes("application/json")) {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    status: 415,
+    error: "Content-Type must be application/json.",
+  };
+}
+
+export async function parseJsonBody<T>(request: Request): Promise<JsonBodyResult<T>> {
+  try {
+    return {
+      ok: true,
+      data: (await request.json()) as T,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 400,
+      error: "Request body must be valid JSON.",
+    };
+  }
+}
+
+export function safeErrorMessage(error: unknown, productionFallback: string) {
+  const message = error instanceof Error ? error.message : productionFallback;
+
+  if (!isProduction()) {
+    return message;
+  }
+
+  if (message.toLowerCase().includes("quota")) {
+    return "Provider quota is unavailable.";
+  }
+
+  return productionFallback;
 }
 
 export function checkRateLimit(request: Request, options: RateLimitOptions): GuardResult {

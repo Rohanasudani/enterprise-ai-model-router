@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, requireLiveModeAccess, requireProductionAdminKey } from "@/lib/deploymentGuards";
+import {
+  checkRateLimit,
+  parseJsonBody,
+  requireJsonRequest,
+  requireLiveModeAccess,
+  requireProductionAdminKey,
+  safeErrorMessage,
+} from "@/lib/deploymentGuards";
 import { runMockEval } from "@/lib/mockEval";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
 import { runOpenAIEval } from "@/lib/providers/openai";
@@ -12,6 +19,15 @@ type EvalRunRequest = {
   mode?: EvalMode;
   weights?: Partial<RouterWeights>;
 };
+
+function normalizeWeight(value: unknown, fallback: number) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(100, numberValue));
+}
 
 export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) {
@@ -27,7 +43,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
   }
 
-  const body = (await request.json()) as EvalRunRequest;
+  const jsonRequest = requireJsonRequest(request);
+  if (!jsonRequest.ok) {
+    return NextResponse.json({ error: jsonRequest.error }, { status: jsonRequest.status });
+  }
+
+  const parsedBody = await parseJsonBody<EvalRunRequest>(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status });
+  }
+
+  const body = parsedBody.data;
   const promptId = body.promptId;
 
   if (!promptId) {
@@ -46,8 +72,10 @@ export async function POST(request: Request) {
   const prompt = toPromptCase(promptRecord);
   const modelProfiles = modelRecords.map(toModelProfile);
   const weights: RouterWeights = {
-    ...defaultRouterWeights,
-    ...body.weights,
+    quality: normalizeWeight(body.weights?.quality, defaultRouterWeights.quality),
+    cost: normalizeWeight(body.weights?.cost, defaultRouterWeights.cost),
+    latency: normalizeWeight(body.weights?.latency, defaultRouterWeights.latency),
+    context: normalizeWeight(body.weights?.context, defaultRouterWeights.context),
   };
   const mode: EvalMode = body.mode === "live_openai" ? "live_openai" : "mock";
 
@@ -66,7 +94,7 @@ export async function POST(request: Request) {
   try {
     transientResults = mode === "live_openai" ? await runOpenAIEval(prompt, modelProfiles) : runMockEval(prompt, modelProfiles);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Live provider request failed";
+    const message = safeErrorMessage(error, "Live provider request failed.");
     const status = message.includes("quota") ? 402 : 502;
     return NextResponse.json({ error: message }, { status });
   }

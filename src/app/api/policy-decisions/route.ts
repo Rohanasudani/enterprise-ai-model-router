@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, requireProductionAdminKey } from "@/lib/deploymentGuards";
+import { checkRateLimit, parseJsonBody, requireJsonRequest, requireProductionAdminKey } from "@/lib/deploymentGuards";
 import { makePolicyDecision } from "@/lib/policyEngine";
 import { toAppUser, toModelProfile, toPolicyDecision, toPromptCase, toTeam } from "@/lib/persistence";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +24,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: rateLimit.error }, { status: rateLimit.status });
   }
 
-  const body = (await request.json()) as PolicyDecisionRequest;
+  const jsonRequest = requireJsonRequest(request);
+  if (!jsonRequest.ok) {
+    return NextResponse.json({ error: jsonRequest.error }, { status: jsonRequest.status });
+  }
+
+  const parsedBody = await parseJsonBody<PolicyDecisionRequest>(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status });
+  }
+
+  const body = parsedBody.data;
 
   if (!body.promptId || !body.userId || !body.requestedModelId) {
     return NextResponse.json({ error: "promptId, userId, and requestedModelId are required" }, { status: 400 });
