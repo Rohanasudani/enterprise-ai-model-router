@@ -1,10 +1,6 @@
 import OpenAI from "openai";
 import type { EvalResult, PromptCase, RubricCriterion } from "@/lib/types";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 type JudgeOutput = {
   overallScore: number;
   criterionScores: {
@@ -37,6 +33,16 @@ function normalizeJudgeOutput(raw: JudgeOutput, rubric: RubricCriterion[]): Norm
   };
 }
 
+function createOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
+
 export async function judgeEvalResult({
   prompt,
   result,
@@ -48,10 +54,7 @@ export async function judgeEvalResult({
   modelName: string;
   judgeModelId: string;
 }): Promise<NormalizedJudgeOutput> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
+  const client = createOpenAIClient();
   const response = await client.responses.create({
     model: judgeModelId,
     instructions:

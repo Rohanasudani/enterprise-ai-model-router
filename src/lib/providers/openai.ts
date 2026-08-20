@@ -1,10 +1,6 @@
 import OpenAI from "openai";
 import type { EvalResult, ModelProfile, PromptCase } from "@/lib/types";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 function estimateFallbackTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 4));
 }
@@ -39,11 +35,18 @@ export function isLiveOpenAIModel(model: ModelProfile) {
   return model.provider === "OpenAI" && model.id.startsWith("gpt-");
 }
 
-export async function runOpenAIEval(prompt: PromptCase, modelProfiles: ModelProfile[]): Promise<EvalResult[]> {
+function createOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
+
+export async function runOpenAIEval(prompt: PromptCase, modelProfiles: ModelProfile[]): Promise<EvalResult[]> {
+  const client = createOpenAIClient();
   const liveModels = modelProfiles.filter(isLiveOpenAIModel);
 
   if (liveModels.length === 0) {
