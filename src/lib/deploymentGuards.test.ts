@@ -21,7 +21,16 @@ const originalEnv = {
 function restoreEnv() {
   process.env.DEMO_ADMIN_KEY = originalEnv.DEMO_ADMIN_KEY;
   process.env.LIVE_MODE_ENABLED = originalEnv.LIVE_MODE_ENABLED;
-  process.env.NODE_ENV = originalEnv.NODE_ENV;
+  setNodeEnv(originalEnv.NODE_ENV);
+}
+
+function setNodeEnv(value: string | undefined) {
+  Object.defineProperty(process.env, "NODE_ENV", {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 test.afterEach(() => {
@@ -68,7 +77,7 @@ test("live mode requires both opt-in and a valid admin key", () => {
 });
 
 test("production-only admin guard allows local development", () => {
-  process.env.NODE_ENV = "development";
+  setNodeEnv("development");
   const request = new Request("https://example.com");
 
   assert.deepEqual(requireProductionAdminKey(request, "Prompt writes"), { ok: true });
@@ -139,7 +148,7 @@ test("JSON parser returns a typed body or a safe 400", async () => {
 });
 
 test("production error messages avoid leaking raw provider details", () => {
-  process.env.NODE_ENV = "production";
+  setNodeEnv("production");
 
   assert.equal(safeErrorMessage(new Error("upstream stack details"), "Provider failed."), "Provider failed.");
   assert.equal(safeErrorMessage(new Error("insufficient quota"), "Provider failed."), "Provider quota is unavailable.");
