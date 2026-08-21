@@ -40,6 +40,10 @@ function categoryLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function appendSentence(message: string, suffix: string) {
+  return `${message.replace(/[.!?]+$/, "")}. ${suffix}`;
+}
+
 function createBlankPromptCase(): PromptCase {
   return {
     id: `custom-${Date.now()}`,
@@ -378,7 +382,9 @@ export default function Home() {
       setLatestResults(nextResults);
       setHistory((current) => [...nextResults, ...current].slice(0, 10));
       setDataSource("seed");
-      setRunMessage(error instanceof Error ? `${error.message}. Showing mock fallback.` : "Eval failed. Showing mock fallback.");
+      setRunMessage(
+        error instanceof Error ? appendSentence(error.message, "Showing mock fallback.") : "Eval failed. Showing mock fallback.",
+      );
     } finally {
       setIsRunning(false);
     }
@@ -424,7 +430,7 @@ export default function Home() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-testid="dashboard">
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
@@ -500,8 +506,12 @@ export default function Home() {
                     Live OpenAI
                   </button>
                 </div>
-                <p className="helper-text">{runMessage}</p>
-                <p className="helper-text">{judgeMessage}</p>
+                <p className="helper-text" data-testid="run-message">
+                  {runMessage}
+                </p>
+                <p className="helper-text" data-testid="judge-message">
+                  {judgeMessage}
+                </p>
               </div>
 
               <div className="control-group">
@@ -550,13 +560,16 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
-                <p className="helper-text">{policyMessage}</p>
+                <p className="helper-text" data-testid="policy-message">
+                  {policyMessage}
+                </p>
               </div>
 
               <div className="control-group">
                 <label>Quality Weight</label>
                 <div className="slider-row">
                   <input
+                    aria-label="Quality Weight"
                     type="range"
                     min="1"
                     max="100"
@@ -571,6 +584,7 @@ export default function Home() {
                 <label>Cost Weight</label>
                 <div className="slider-row">
                   <input
+                    aria-label="Cost Weight"
                     type="range"
                     min="1"
                     max="100"
@@ -585,6 +599,7 @@ export default function Home() {
                 <label>Latency Weight</label>
                 <div className="slider-row">
                   <input
+                    aria-label="Latency Weight"
                     type="range"
                     min="1"
                     max="100"
@@ -599,6 +614,7 @@ export default function Home() {
                 <label>Context Weight</label>
                 <div className="slider-row">
                   <input
+                    aria-label="Context Weight"
                     type="range"
                     min="1"
                     max="100"
@@ -627,12 +643,16 @@ export default function Home() {
               </div>
               <div className="metric">
                 <div className="metric-label">Recommended Preview</div>
-                <div className="metric-value">{winner.name}</div>
+                <div className="metric-value" data-testid="recommended-preview">
+                  {winner.name}
+                </div>
                 <div className="metric-note">updates as weights change</div>
               </div>
               <div className="metric">
                 <div className="metric-label">Router Preview</div>
-                <div className="metric-value">{decision.routerScore}</div>
+                <div className="metric-value" data-testid="router-preview-score">
+                  {decision.routerScore}
+                </div>
                 <div className="metric-note">not persisted until Run Eval</div>
               </div>
               <div className="metric">
@@ -648,7 +668,7 @@ export default function Home() {
             </div>
 
             <div className="main-grid">
-              <div className="panel">
+              <div className="panel" data-testid="dataset-manager-panel">
                 <div className="panel-header">
                   <p className="panel-title">Dataset and Rubric Manager</p>
                   <p className="panel-subtitle">Create or update prompt cases that persist to PostgreSQL.</p>
@@ -770,7 +790,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel" data-testid="savings-report-panel">
                 <div className="panel-header">
                   <p className="panel-title">Savings Report</p>
                   <p className="panel-subtitle">Enterprise spend governance across policy-routed requests.</p>
@@ -819,7 +839,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel" data-testid="model-comparison-panel">
                 <div className="panel-header">
                   <p className="panel-title">Model Comparison</p>
                   <p className="panel-subtitle">Average quality for this run: {averageQuality.toFixed(1)}/100</p>
@@ -877,7 +897,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel" data-testid="router-preview-panel">
                 <div className="panel-header">
                   <p className="panel-title">Router Preview</p>
                   <p className="panel-subtitle">
@@ -910,7 +930,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel" data-testid="saved-policy-decision-panel">
                 <div className="panel-header">
                   <p className="panel-title">Saved Policy Decision</p>
                   <p className="panel-subtitle">
@@ -923,7 +943,7 @@ export default function Home() {
                 </div>
                 <div className="panel-body recommendation">
                   {hasUnsavedPolicyInputs ? (
-                    <div className="notice-banner">
+                    <div className="notice-banner" data-testid="unsaved-policy-banner">
                       Controls changed after this decision. Click Route Request to update the audit result.
                     </div>
                   ) : null}

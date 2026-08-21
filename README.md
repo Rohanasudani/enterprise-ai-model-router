@@ -39,6 +39,7 @@ The main workflow:
 - OpenAI API
 - Docker Compose
 - ESLint
+- Playwright
 - Vercel
 - Neon Postgres
 
@@ -128,6 +129,7 @@ npm run dev
 npm run build
 npm run lint
 npm test
+npm run test:e2e
 npm run db:migrate
 npm run db:seed
 npm run db:studio

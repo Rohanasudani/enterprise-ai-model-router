@@ -9,6 +9,24 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ai_model_router
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_model_router?schema=public
+      LIVE_MODE_ENABLED: "false"
+      DEMO_ADMIN_KEY: ci-demo-admin-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,6 +40,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare database
+        run: |
+          npx prisma migrate deploy
+          npm run db:seed
+
       - name: Lint
         run: npm run lint
 
@@ -30,5 +53,9 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_model_router?schema=public
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: npm run test:e2e
