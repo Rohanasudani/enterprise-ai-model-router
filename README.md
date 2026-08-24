@@ -12,9 +12,21 @@ This is not an OpenRouter clone. It is a company-side governance and evaluation 
 
 Live demo: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
 
+![Enterprise AI Model Router demo](public/demo/enterprise-ai-model-router-demo.gif)
+
 ## Why This Matters
 
 Companies adopting AI coding tools need a control plane between developers and expensive foundation models. This project simulates that layer: it evaluates model quality, routes requests based on complexity and budget, blocks unsafe or personal usage, and generates savings reports that platform teams can use to justify routing decisions.
+
+## Case Study
+
+Imagine a company rolling out AI coding tools to every engineer. Without governance, simple refactors, personal tasks, and high-volume support prompts can all hit premium models by default. This project models the control plane that would sit between developers and provider APIs:
+
+- route simple or low-risk work to cheaper models
+- keep premium models available for complex, high-value tasks
+- block requests that appear personal, unsafe, or credential-related
+- track team budget impact over time
+- produce auditable quality/cost reports instead of relying on intuition
 
 ## Screenshots
 
@@ -169,6 +181,13 @@ npm run db:seed
 npm run db:studio
 ```
 
+## Quality Bar
+
+- Unit tests cover deployment guards, admin-key checks, live-mode gating, rate limiting, payload parsing, and safe error handling.
+- Playwright E2E tests cover dashboard load, router weight changes, mock evals, policy routing, and live-mode blocking.
+- GitHub Actions runs PostgreSQL, migrations, seed data, lint, unit tests, production build, Chromium install, and E2E on every push.
+- `npm audit --audit-level=moderate` currently reports 0 known vulnerabilities.
+
 ## API Routes
 
 - `POST /api/eval-runs`: run a model eval in mock or live mode
@@ -203,6 +222,8 @@ Implemented:
 - dataset/rubric management
 - savings dashboard and exports
 - GitHub-ready documentation
+- Playwright E2E coverage
+- public demo GIF and screenshots
 
 Planned:
 

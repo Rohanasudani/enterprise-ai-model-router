@@ -69,3 +69,75 @@ Main persisted entities:
 The router is intentionally explainable. A company should not only know which model was selected; it should know why that model was selected, what tradeoffs were made, and how much money was saved by choosing a cheaper model or blocking an invalid request.
 
 This makes the project useful for AI platform teams, developer productivity teams, and infrastructure groups managing LLM usage at scale.
+
+## Router Scoring
+
+The router computes a weighted score for each candidate model using four normalized dimensions:
+
+- `quality`: eval score for the model output on the selected prompt case
+- `cost`: inverse normalized cost, so cheaper completions score higher
+- `latency`: inverse latency score, so faster responses score higher
+- `context`: context-window fit relative to the prompt size
+
+The dashboard exposes these as sliders. Changing weights updates the router preview immediately, while `Run Eval` refreshes outputs and persists a reproducible run when the caller has production write access.
+
+At a high level:
+
+```text
+routerScore =
+  qualityScore * qualityWeight +
+  costScore * costWeight +
+  latencyScore * latencyWeight +
+  contextFit * contextWeight
+```
+
+The result is normalized by the total weight and rounded for display. Each recommendation includes the reasons used to select the winning model so the decision can be reviewed later.
+
+## Policy Engine
+
+The policy engine answers a separate question from the router: should the company allow this request at all?
+
+It classifies the request into categories such as business work, personal use, sensitive content, or unsafe usage. It then combines that classification with requester metadata, team budget, requested model, and model alternatives.
+
+Possible policy actions:
+
+- `allow`: requested model is acceptable
+- `downgrade`: route to a cheaper model that still fits the task
+- `escalate`: require review or a stronger model for complex/high-risk work
+- `block`: deny personal, unsafe, or credential-like requests
+
+This separation keeps the system realistic: quality routing and enterprise governance are related, but they are not the same decision.
+
+## Mock vs Live Mode
+
+Mock mode is the public demo path. It produces deterministic, provider-free eval results so the dashboard can be used safely without spending API credits.
+
+Live OpenAI mode is opt-in and guarded by:
+
+- `LIVE_MODE_ENABLED=true`
+- a configured `OPENAI_API_KEY`
+- a valid `x-demo-admin-key` header
+
+The public Vercel deployment intentionally keeps live mode disabled. This demonstrates the production safety posture while still making the project interactive for recruiters.
+
+## Production Safety Tradeoffs
+
+This project is designed as a portfolio-grade simulation of an enterprise control plane, not a drop-in enterprise product.
+
+Implemented safeguards:
+
+- live provider calls are disabled by default
+- expensive and mutating actions require an admin key in production
+- public mock runs can return preview data without writing to the database
+- JSON content-type checks and payload size caps protect API routes
+- deployment guards avoid leaking provider stack details in production
+- security headers are configured in `next.config.ts`
+- automated unit and E2E tests run in CI
+
+Known next steps for a real company deployment:
+
+- replace the demo admin key with OAuth/RBAC
+- move rate limiting to Redis, Vercel KV, or another shared store
+- add tenant/workspace isolation
+- add provider-level spend caps and billing alerts
+- add scheduled regression evals for prompt/model drift
