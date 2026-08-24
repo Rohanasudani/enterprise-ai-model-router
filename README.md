@@ -1,10 +1,34 @@
 # Enterprise AI Model Router
 
+[![CI](https://github.com/Rohanasudani/enterprise-ai-model-router/actions/workflows/ci.yml/badge.svg)](https://github.com/Rohanasudani/enterprise-ai-model-router/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://enterprise-ai-model-router.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-336791)](https://www.prisma.io/)
+
 A full-stack AI infrastructure project that routes LLM requests by task complexity, quality, latency, cost, context window, team budget, and company policy.
 
 This is not an OpenRouter clone. It is a company-side governance and evaluation layer for deciding when a request should use a premium model, a cheaper model, a live evaluation flow, or be blocked as policy-violating usage.
 
 Live demo: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
+
+## Why This Matters
+
+Companies adopting AI coding tools need a control plane between developers and expensive foundation models. This project simulates that layer: it evaluates model quality, routes requests based on complexity and budget, blocks unsafe or personal usage, and generates savings reports that platform teams can use to justify routing decisions.
+
+## Screenshots
+
+### Dashboard
+
+![Dashboard](public/screenshots/dashboard.png)
+
+### Router Preview
+
+![Router Preview](public/screenshots/router-preview.png)
+
+### Policy and Savings
+
+![Policy and Savings](public/screenshots/policy-savings.png)
 
 ## Highlights
 
@@ -28,6 +52,16 @@ The main workflow:
 4. Judge the latest run with an LLM-as-judge scorer.
 5. Route a simulated enterprise request through budget and policy controls.
 6. Export a savings report for leadership or platform teams.
+
+## 60-Second Demo Script
+
+1. Open the live demo.
+2. Change the router weights to show how model selection shifts by cost, latency, quality, and context.
+3. Click `Run Eval` in mock mode to generate a model comparison without provider credits.
+4. Click `Route Request` to create a policy decision.
+5. Review the saved decision, audit reasons, and estimated savings.
+6. Open the CSV or JSON savings export.
+7. Switch to Live OpenAI mode to show that public live calls are safely blocked.
 
 ## Tech Stack
 
