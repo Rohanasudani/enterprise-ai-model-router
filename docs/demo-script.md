@@ -5,7 +5,10 @@ Use this walkthrough for a recruiter, interviewer, or GitHub video demo.
 ## Setup
 
 ```bash
-cd /Users/apple/.codex/workspaces/default/ai-model-router
+git clone https://github.com/Rohanasudani/enterprise-ai-model-router.git
+cd enterprise-ai-model-router
+npm install
+cp .env.example .env
 docker compose up -d
 npm run db:migrate
 npm run db:seed
