@@ -40,6 +40,7 @@ const rateLimitGlobal = globalThis as typeof globalThis & {
 };
 
 function getRateLimitStore() {
+  // TODO: Use a shared TTL-backed store before enabling multi-instance write traffic.
   if (!rateLimitGlobal.__aiRouterRateLimits) {
     rateLimitGlobal.__aiRouterRateLimits = new Map<string, RateLimitEntry>();
   }

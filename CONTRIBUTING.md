@@ -1,6 +1,11 @@
 # Contributing
 
-Thanks for taking a look at Enterprise AI Model Router. This project is structured as a portfolio-grade simulation of an enterprise LLM routing and eval control plane.
+Enterprise AI Model Router is an explainable LLM evaluation, policy, and routing
+control plane. Changes should preserve the distinction between synthetic demo data,
+provider-backed measurements, and estimated savings.
+
+Read [DESIGN.md](DESIGN.md), [docs/evaluation.md](docs/evaluation.md), and
+[docs/security.md](docs/security.md) before changing routing or production behavior.
 
 ## Local Setup
 

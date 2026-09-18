@@ -20,6 +20,7 @@ function normalizeCost(cost: number, maxCost: number) {
 }
 
 function normalizeLatency(latencyMs: number) {
+  // TODO: Calibrate latency bands from persisted telemetry instead of a fixed slope.
   return clamp(100 - latencyMs / 35, 0, 100);
 }
 

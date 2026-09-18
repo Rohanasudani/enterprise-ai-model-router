@@ -118,11 +118,13 @@ Live OpenAI mode is opt-in and guarded by:
 - a configured `OPENAI_API_KEY`
 - a valid `x-demo-admin-key` header
 
-The public Vercel deployment intentionally keeps live mode disabled. This demonstrates the production safety posture while still making the project interactive for recruiters.
+The public Vercel deployment intentionally keeps live mode disabled. This preserves the
+interactive workflow without exposing provider credits to anonymous users.
 
 ## Production Safety Tradeoffs
 
-This project is designed as a portfolio-grade simulation of an enterprise control plane, not a drop-in enterprise product.
+This project demonstrates the control-plane workflow but is not a drop-in
+multi-tenant enterprise product.
 
 Implemented safeguards:
 

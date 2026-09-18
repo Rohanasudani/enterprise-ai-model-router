@@ -6,146 +6,63 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-336791)](https://www.prisma.io/)
 
-A full-stack AI infrastructure project that routes LLM requests by task complexity, quality, latency, cost, context window, team budget, and company policy.
+An explainable control plane for evaluating and routing LLM requests. The application
+combines model quality, estimated cost, latency, context fit, task type, team budget,
+and usage policy to choose a model or block a request.
 
-This is not an OpenRouter clone. It is a company-side governance and evaluation layer for deciding when a request should use a premium model, a cheaper model, a live evaluation flow, or be blocked as policy-violating usage.
-
-Live demo: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
+[Open the public demo](https://enterprise-ai-model-router.vercel.app)
 
 ![Enterprise AI Model Router demo](public/demo/enterprise-ai-model-router-demo.gif)
 
-## Why This Matters
+## Core Workflow
 
-Companies adopting AI coding tools need a control plane between developers and expensive foundation models. This project simulates that layer: it evaluates model quality, routes requests based on complexity and budget, blocks unsafe or personal usage, and generates savings reports that platform teams can use to justify routing decisions.
+1. Select or create a prompt case with an expected behavior and scoring rubric.
+2. Run a deterministic mock evaluation or a guarded live OpenAI evaluation.
+3. Compare output quality, latency, token usage, and estimated cost.
+4. Optionally replace heuristic scores with structured LLM-as-judge results.
+5. Route an enterprise request through model scoring, budget, and policy checks.
+6. Review the persisted decision history and export a savings estimate.
 
-## Case Study
+## Capabilities
 
-Imagine a company rolling out AI coding tools to every engineer. Without governance, simple refactors, personal tasks, and high-volume support prompts can all hit premium models by default. This project models the control plane that would sit between developers and provider APIs:
-
-- route simple or low-risk work to cheaper models
-- keep premium models available for complex, high-value tasks
-- block requests that appear personal, unsafe, or credential-related
-- track team budget impact over time
-- produce auditable quality/cost reports instead of relying on intuition
-
-## Screenshots
-
-### Dashboard
-
-![Dashboard](public/screenshots/dashboard.png)
-
-### Router Preview
-
-![Router Preview](public/screenshots/router-preview.png)
-
-### Policy and Savings
-
-![Policy and Savings](public/screenshots/policy-savings.png)
-
-## Highlights
-
-- Policy-aware model routing with `allow`, `block`, `downgrade`, and `escalate` decisions
-- Eval runner with mock mode and live OpenAI mode
-- LLM-as-judge rubric scoring with persisted judge explanations
-- Prompt dataset and rubric management from the dashboard
-- PostgreSQL persistence with Prisma migrations
-- Team budget tracking, estimated savings, and CSV/JSON reports
-- Explainable router decisions with cost, latency, quality, context, and policy reasoning
-- Dashboard for run history, model comparison, policy audits, and savings reporting
-- Production demo safety controls for live calls, protected writes, rate limits, and request size caps
-
-## Product Demo
-
-The main workflow:
-
-1. Pick or create a prompt case with task type, difficulty, expected behavior, and rubric.
-2. Run an eval in mock mode or live OpenAI mode.
-3. Compare model quality, cost, token usage, and latency.
-4. Judge the latest run with an LLM-as-judge scorer.
-5. Route a simulated enterprise request through budget and policy controls.
-6. Export a savings report for leadership or platform teams.
-
-## 60-Second Demo Script
-
-1. Open the live demo.
-2. Change the router weights to show how model selection shifts by cost, latency, quality, and context.
-3. Click `Run Eval` in mock mode to generate a model comparison without provider credits.
-4. Click `Route Request` to create a policy decision.
-5. Review the saved decision, audit reasons, and estimated savings.
-6. Open the CSV or JSON savings export.
-7. Switch to Live OpenAI mode to show that public live calls are safely blocked.
-
-## Tech Stack
-
-- Next.js App Router
-- TypeScript
-- React
-- PostgreSQL
-- Prisma ORM
-- OpenAI API
-- Docker Compose
-- ESLint
-- Playwright
-- Vercel
-- Neon Postgres
+- weighted model routing across quality, cost, latency, and context fit
+- separate policy decisions for `allow`, `block`, `downgrade`, and `escalate`
+- deterministic mock evaluations for a no-credit public demo
+- guarded OpenAI Responses API integration
+- structured LLM-as-judge scoring against stored rubrics
+- PostgreSQL history for prompts, runs, results, routing, teams, and policy audits
+- JSON and CSV savings reports
+- request validation, admin gates, rate limits, and production-safe errors
+- unit, production-build, and Playwright coverage in GitHub Actions
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Dashboard[Next.js Dashboard] --> EvalAPI[Eval Run API]
-  Dashboard --> PolicyAPI[Policy Decision API]
-  Dashboard --> PromptAPI[Prompt Case API]
-  Dashboard --> ReportAPI[Savings Report API]
-
-  EvalAPI --> Router[Model Router]
-  EvalAPI --> Provider[Mock or Live Provider]
-  EvalAPI --> Prisma[Prisma Client]
-  PolicyAPI --> Policy[Policy Engine]
-  Policy --> Router
-  ReportAPI --> Reports[Report Builder]
-
+  UI[Next.js dashboard] --> API[App Router APIs]
+  API --> Guards[Deployment guards]
+  API --> Router[Model router]
+  API --> Policy[Policy engine]
+  API --> Providers[Mock / OpenAI / judge]
+  API --> Reports[Savings reports]
+  API --> Prisma[Prisma]
   Prisma --> Postgres[(PostgreSQL)]
-  Provider --> OpenAI[OpenAI Responses API]
+  Providers --> OpenAI[OpenAI Responses API]
 ```
 
-More detail: [docs/architecture.md](docs/architecture.md)
+The router and policy engine deliberately answer different questions. The router ranks
+candidate models for a prompt and set of results. The policy engine decides whether the
+request should be funded, downgraded, escalated, or blocked.
 
-## Production Safety
-
-The app is designed to be safe as a public mock-mode demo. Live provider calls and production persistence are guarded separately:
-
-- `LIVE_MODE_ENABLED=false` disables live OpenAI calls by default.
-- `DEMO_ADMIN_KEY` protects live evals, LLM-as-judge scoring, dataset writes, and production persistence.
-- POST routes use basic per-IP rate limits.
-- Prompt and judge payloads have size caps.
-- Public production mock evals can return preview results without writing to the database.
-
-More detail: [docs/production-safety.md](docs/production-safety.md)
-
-## Deployment
-
-The public demo is deployed on Vercel with Neon Postgres:
-
-- Production URL: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-router.vercel.app)
-- Public mode: mock evals only
-- Live OpenAI mode: disabled by `LIVE_MODE_ENABLED=false`
-- Production writes and live actions: protected by `DEMO_ADMIN_KEY`
-
-## Data Model
-
-- `ModelProfile`: provider, model name, context window, pricing, latency, task strengths, and quality scores
-- `PromptCase`: dataset, task type, difficulty, prompt, expected behavior, and rubric
-- `EvalRun`: eval configuration, router weights, selected prompt, and timestamp
-- `EvalResult`: candidate output, score, latency, tokens, cost, rubric scores, and judge metadata
-- `RouterDecision`: selected model, weighted score, cost/latency/quality reasoning, and alternatives
-- `Team`: monthly AI budget and current spend
-- `AppUser`: requester identity, role, team, and access tier
-- `PolicyDecision`: request classification, policy action, routed model, savings, and audit reasons
+See [docs/architecture.md](docs/architecture.md) for module and request-flow details.
 
 ## Run Locally
 
+Prerequisites: Node.js 24+, Docker Desktop, and npm.
+
 ```bash
+git clone https://github.com/Rohanasudani/enterprise-ai-model-router.git
+cd enterprise-ai-model-router
 npm install
 cp .env.example .env
 docker compose up -d
@@ -156,83 +73,82 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-If Docker is not available, create a PostgreSQL database locally or in Neon/Supabase and set `DATABASE_URL` in `.env`.
+Mock mode does not require an OpenAI key. For a private live evaluation, set
+`OPENAI_API_KEY`, `LIVE_MODE_ENABLED=true`, and a strong `DEMO_ADMIN_KEY` in the local
+environment. Do not expose the admin key through a `NEXT_PUBLIC_` variable.
 
-## Environment Variables
+## Environment
+
+| Variable | Purpose | Public demo default |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string | required |
+| `LIVE_MODE_ENABLED` | permits provider-backed eval and judge paths | `false` |
+| `OPENAI_API_KEY` | server-side provider credential | unset |
+| `OPENAI_JUDGE_MODEL` | model used for rubric scoring | `gpt-4.1-mini` |
+| `DEMO_ADMIN_KEY` | protects live and mutating production actions | required |
+
+## Evaluation Boundaries
+
+The public mock path is a deterministic product demonstration. Its outputs, token
+counts, latency, and scores are synthetic and must not be interpreted as provider
+benchmarks. Live evaluations call configured OpenAI models, but their initial scores
+are still heuristic until the judge action records a rubric-based score.
+
+Routing uses the results and model prices available to the application at that moment.
+Savings reports are counterfactual estimates, not reconciled provider invoices. The
+keyword policy classifier demonstrates the policy flow; it is not a production content
+moderation or data-loss-prevention system.
+
+See [docs/evaluation.md](docs/evaluation.md) for the scoring and reporting methodology.
+
+## Production Safety
+
+The Vercel deployment runs in public mock mode. Live calls and mutating production
+actions require server-side configuration and the admin header. Public mock evals can
+return previews without persisting new rows.
+
+This is a controlled public demo, not a complete multi-tenant security boundary. A
+company deployment would still need real authentication, RBAC, tenant isolation,
+shared-store rate limiting, provider spend controls, and audit retention policies.
+
+See [docs/security.md](docs/security.md) for the threat model and limitations.
+
+## Verification
 
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ai_model_router?schema=public"
-OPENAI_API_KEY="optional_for_live_mode"
-OPENAI_JUDGE_MODEL="gpt-4.1-mini"
-```
-
-The app works without OpenAI credits in mock mode. Live mode requires a funded OpenAI API project.
-
-## Commands
-
-```bash
-npm run dev
-npm run build
 npm run lint
 npm test
+npm run build
 npm run test:e2e
-npm run db:migrate
-npm run db:seed
-npm run db:studio
+npm audit --audit-level=moderate
 ```
 
-## Quality Bar
+CI starts PostgreSQL 16, applies migrations, seeds fixtures, runs lint and unit tests,
+builds the production application, and executes the Chromium E2E suite.
 
-- Unit tests cover deployment guards, admin-key checks, live-mode gating, rate limiting, payload parsing, and safe error handling.
-- Playwright E2E tests cover dashboard load, router weight changes, mock evals, policy routing, and live-mode blocking.
-- GitHub Actions runs PostgreSQL, migrations, seed data, lint, unit tests, production build, Chromium install, and E2E on every push.
-- `npm audit --audit-level=moderate` currently reports 0 known vulnerabilities.
+## API Surface
 
-## API Routes
+| Route | Purpose |
+| --- | --- |
+| `POST /api/eval-runs` | run mock or live evaluations |
+| `POST /api/judge-results` | judge stored eval results |
+| `GET/POST /api/prompt-cases` | list or create prompt cases |
+| `POST /api/policy-decisions` | classify and route requests |
+| `GET /api/reports/savings` | return JSON or CSV savings reports |
+| `POST /api/bootstrap` | seed protected demo data |
 
-- `POST /api/eval-runs`: run a model eval in mock or live mode
-- `POST /api/judge-results`: score the latest eval result with an LLM judge
-- `GET /api/prompt-cases`: list prompt cases
-- `POST /api/prompt-cases`: create prompt cases and rubrics
-- `POST /api/policy-decisions`: classify and route enterprise requests
-- `GET /api/reports/savings`: return savings report JSON
-- `GET /api/reports/savings?format=csv`: export savings report CSV
-- `POST /api/bootstrap`: seed demo data from the app
+## Documentation
 
-## Reports
+- [Design](DESIGN.md)
+- [Architecture](docs/architecture.md)
+- [Evaluation](docs/evaluation.md)
+- [Deployment](docs/deployment.md)
+- [Security](docs/security.md)
 
-The savings report summarizes:
+## Current Work
 
-- total policy decisions
-- allowed, blocked, downgraded, and escalated requests
-- estimated spend before and after routing
-- estimated savings from downgrades and blocks
-- team budget utilization
-- per-model routing distribution
-
-## Current Status
-
-Implemented:
-
-- Prisma/PostgreSQL persistence
-- mock eval runner
-- live OpenAI eval adapter
-- policy-aware enterprise routing
-- LLM-as-judge scoring
-- dataset/rubric management
-- savings dashboard and exports
-- GitHub-ready documentation
-- Playwright E2E coverage
-- public demo GIF and screenshots
-
-Planned:
-
-- Anthropic, Gemini, Groq, and Together adapters
-- auth and team workspaces
-- scheduled regression evals
-- PDF report generation
-- prompt/version diffing
-
-## Project Summary
-
-Built an enterprise LLM routing and evaluation platform in Next.js, TypeScript, PostgreSQL, and Prisma that selects models by quality, cost, latency, context needs, task type, user budget, and policy constraints. Added mock/live provider modes, OpenAI integration, LLM-as-judge rubric scoring, prompt dataset management, policy audit history, and reproducible savings reports.
+- shared, durable rate limiting for multi-instance deployments
+- authenticated workspaces and tenant-scoped data access
+- versioned model pricing, prompts, and rubrics
+- repeated provider evaluations with calibration and drift tracking
+- additional provider adapters behind the existing provider boundary
