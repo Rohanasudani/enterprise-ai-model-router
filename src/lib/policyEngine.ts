@@ -24,7 +24,7 @@ function modelTaskScore(model: ModelProfile, prompt: PromptCase) {
 function classifyRequest(prompt: PromptCase): RequestCategory {
   const text = `${prompt.title} ${prompt.prompt} ${prompt.expectedOutput}`.toLowerCase();
 
-  if (/(personal|side project|startup landing|dating|resume for another job|homework)/.test(text)) {
+  if (/(personal|side project|startup landing|dating|resume for another job)/.test(text)) {
     return "personal";
   }
 
@@ -103,7 +103,7 @@ export function makePolicyDecision({
   if (category === "personal") {
     action = "block";
     selectedModel = undefined;
-    reasons.push("Request appears unrelated to company work, so policy blocks company-funded AI usage.");
+    reasons.push("Request appears unrelated to authorized organizational use, so policy blocks funded AI usage.");
   } else if (category === "sensitive") {
     action = "block";
     selectedModel = undefined;
