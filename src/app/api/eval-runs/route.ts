@@ -7,6 +7,7 @@ import {
   requireProductionAdminKey,
   safeErrorMessage,
 } from "@/lib/deploymentGuards";
+import { models as seedModels, promptCases as seedPromptCases } from "@/lib/data";
 import { runMockEval } from "@/lib/mockEval";
 import { toEvalResult, toModelProfile, toPromptCase } from "@/lib/persistence";
 import { runOpenAIEval } from "@/lib/providers/openai";
@@ -30,10 +31,6 @@ function normalizeWeight(value: unknown, fallback: number) {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
-
   const rateLimit = checkRateLimit(request, {
     route: "eval-runs",
     limit: 12,
@@ -60,17 +57,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "promptId is required" }, { status: 400 });
   }
 
-  const [promptRecord, modelRecords] = await Promise.all([
-    prisma.promptCase.findUnique({ where: { id: promptId } }),
-    prisma.modelProfile.findMany({ orderBy: { qualityScore: "desc" } }),
-  ]);
-
-  if (!promptRecord) {
-    return NextResponse.json({ error: "Prompt case not found" }, { status: 404 });
-  }
-
-  const prompt = toPromptCase(promptRecord);
-  const modelProfiles = modelRecords.map(toModelProfile);
   const weights: RouterWeights = {
     quality: normalizeWeight(body.weights?.quality, defaultRouterWeights.quality),
     cost: normalizeWeight(body.weights?.cost, defaultRouterWeights.cost),
@@ -90,6 +76,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 });
   }
 
+  let prompt = seedPromptCases.find((candidate) => candidate.id === promptId);
+  let modelProfiles = seedModels;
+  let databaseAvailable = false;
+
+  if (process.env.DATABASE_URL) {
+    try {
+      const [promptRecord, modelRecords] = await Promise.all([
+        prisma.promptCase.findUnique({ where: { id: promptId } }),
+        prisma.modelProfile.findMany({ orderBy: { qualityScore: "desc" } }),
+      ]);
+      if (promptRecord && modelRecords.length > 0) {
+        prompt = toPromptCase(promptRecord);
+        modelProfiles = modelRecords.map(toModelProfile);
+        databaseAvailable = true;
+      }
+    } catch {
+      databaseAvailable = false;
+    }
+  }
+
+  if (!prompt) {
+    return NextResponse.json({ error: "Prompt case not found" }, { status: 404 });
+  }
+
   let transientResults;
   try {
     transientResults = mode === "live_openai" ? await runOpenAIEval(prompt, modelProfiles) : runMockEval(prompt, modelProfiles);
@@ -101,7 +111,7 @@ export async function POST(request: Request) {
   const decision = recommendModel(prompt, transientResults, weights, modelProfiles);
 
   const persistenceAccess = requireProductionAdminKey(request, "Eval result persistence");
-  if (!persistenceAccess.ok) {
+  if (!databaseAvailable || !persistenceAccess.ok) {
     return NextResponse.json({
       results: transientResults,
       decision,

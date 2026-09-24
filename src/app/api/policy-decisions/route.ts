@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { models as seedModels, promptCases as seedPromptCases, teams as seedTeams, users as seedUsers } from "@/lib/data";
 import { checkRateLimit, parseJsonBody, requireJsonRequest, requireProductionAdminKey } from "@/lib/deploymentGuards";
 import { makePolicyDecision } from "@/lib/policyEngine";
 import { toAppUser, toModelProfile, toPolicyDecision, toPromptCase, toTeam } from "@/lib/persistence";
@@ -11,10 +12,6 @@ type PolicyDecisionRequest = {
 };
 
 export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
-
   const rateLimit = checkRateLimit(request, {
     route: "policy-decisions",
     limit: 20,
@@ -40,29 +37,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "promptId, userId, and requestedModelId are required" }, { status: 400 });
   }
 
-  const [promptRecord, userRecord, modelRecords] = await Promise.all([
-    prisma.promptCase.findUnique({ where: { id: body.promptId } }),
-    prisma.appUser.findUnique({
-      where: { id: body.userId },
-      include: {
-        team: true,
-      },
-    }),
-    prisma.modelProfile.findMany({ orderBy: { qualityScore: "desc" } }),
-  ]);
+  let prompt = seedPromptCases.find((candidate) => candidate.id === body.promptId);
+  let user = seedUsers.find((candidate) => candidate.id === body.userId);
+  let team = seedTeams.find((candidate) => candidate.id === user?.teamId);
+  let models = seedModels;
+  let databaseAvailable = false;
 
-  if (!promptRecord) {
+  if (process.env.DATABASE_URL) {
+    try {
+      const [promptRecord, userRecord, modelRecords] = await Promise.all([
+        prisma.promptCase.findUnique({ where: { id: body.promptId } }),
+        prisma.appUser.findUnique({
+          where: { id: body.userId },
+          include: {
+            team: true,
+          },
+        }),
+        prisma.modelProfile.findMany({ orderBy: { qualityScore: "desc" } }),
+      ]);
+      if (promptRecord && userRecord && modelRecords.length > 0) {
+        prompt = toPromptCase(promptRecord);
+        user = toAppUser(userRecord);
+        team = toTeam(userRecord.team);
+        models = modelRecords.map(toModelProfile);
+        databaseAvailable = true;
+      }
+    } catch {
+      databaseAvailable = false;
+    }
+  }
+
+  if (!prompt) {
     return NextResponse.json({ error: "Prompt case not found" }, { status: 404 });
   }
 
-  if (!userRecord) {
+  if (!user || !team) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
-
-  const prompt = toPromptCase(promptRecord);
-  const user = toAppUser(userRecord);
-  const team = toTeam(userRecord.team);
-  const models = modelRecords.map(toModelProfile);
   const draft = makePolicyDecision({
     prompt,
     user,
@@ -72,7 +83,7 @@ export async function POST(request: Request) {
   });
 
   const persistenceAccess = requireProductionAdminKey(request, "Policy decision persistence");
-  if (!persistenceAccess.ok) {
+  if (!databaseAvailable || !persistenceAccess.ok) {
     return NextResponse.json({
       decision: {
         ...draft,

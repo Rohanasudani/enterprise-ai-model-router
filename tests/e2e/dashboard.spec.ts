@@ -21,9 +21,9 @@ test("dashboard loads with routing, eval, and savings surfaces", async ({ page }
   await openDashboard(page);
 
   await expect(page.getByRole("heading", { name: "AI Model Router" })).toBeVisible();
-  await expect(page.getByLabel("Prompt Case")).toBeVisible();
+  await expect(page.getByLabel("Task", { exact: true })).toBeVisible();
   await expect(page.getByTestId("model-comparison-panel")).toContainText("Model Comparison");
-  await expect(page.getByTestId("router-preview-panel")).toContainText("Router Preview");
+  await expect(page.getByTestId("router-preview-panel")).toContainText("Explainable Model Recommendation");
   await expect(page.getByTestId("savings-report-panel")).toContainText("Export JSON");
   await expect(page.getByRole("link", { name: "Export CSV" })).toHaveAttribute(
     "href",
@@ -50,7 +50,7 @@ test("router preview responds immediately to weight changes", async ({ page }) =
 test("mock eval updates model comparison without requiring provider credits", async ({ page }) => {
   await openDashboard(page);
 
-  await page.getByRole("button", { name: "Mock" }).click();
+  await page.getByRole("button", { name: "Simulated" }).click();
   await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/eval-runs") && response.request().method() === "POST"),
     page.getByRole("button", { name: "Run Eval" }).click(),
@@ -84,4 +84,52 @@ test("live OpenAI mode is blocked when live mode is disabled", async ({ page }) 
   await expect(page.getByTestId("run-message")).toContainText(
     "Live OpenAI mode is disabled for this deployment. Showing mock fallback.",
   );
+});
+
+test("higher-education scenario stays synthetic and explains its limits", async ({ page }) => {
+  await openDashboard(page);
+
+  await page.getByRole("button", { name: "Route Request" }).click();
+  await expect(page.getByTestId("policy-message")).toContainText(/Policy (decision saved|preview generated)/);
+  await expect(page.locator(".audit-panel")).toContainText(/allow|block|downgrade|escalate/i);
+  await expect(page.locator(".budget-panel")).not.toContainText("Savings report unavailable");
+
+  await page.getByRole("button", { name: /Higher Education/ }).click();
+
+  await expect(page.getByText("Illustrative university pilot", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Not affiliated with or connected to any university production system/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Live OpenAI" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Judge Latest" })).toBeDisabled();
+  await expect(page.getByLabel("Task", { exact: true })).toHaveValue("student-concept-001");
+  await expect(page.getByTestId("savings-report-panel")).toContainText("Illustrative resource savings");
+  await expect(page.getByRole("link", { name: "Export JSON" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Run Eval" }).click();
+  await expect(page.getByTestId("run-message")).toContainText(
+    "Synthetic comparison complete. Scores are illustrative",
+  );
+
+  await page.getByRole("button", { name: "Preview Campus Guidance" }).click();
+  await expect(page.getByTestId("policy-message")).toContainText(
+    "Shadow-mode preview generated. It did not change live traffic or store prompt content.",
+  );
+
+  await page.getByRole("button", { name: /Enterprise/ }).click();
+  await expect(page.getByRole("link", { name: "Export JSON" })).toBeVisible();
+  await expect(page.locator(".audit-panel")).toContainText(/allow|block|downgrade|escalate/i);
+  await expect(page.locator(".budget-panel")).not.toContainText("Savings report unavailable");
+});
+
+test("core recommendation flow remains usable on a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openDashboard(page);
+
+  await expect(page.getByRole("heading", { name: /Choose the right model/ })).toBeVisible();
+  await page.getByRole("button", { name: /Higher Education/ }).click();
+  await expect(page.getByTestId("recommended-preview")).toContainText("GPT-5.6 Luna");
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
 });

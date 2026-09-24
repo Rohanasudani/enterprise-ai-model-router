@@ -2,6 +2,8 @@ export type TaskType = "coding" | "summarization" | "reasoning" | "support";
 
 export type EvalMode = "mock" | "live_openai";
 
+export type DeploymentScenario = "enterprise" | "higher_education";
+
 export type ScoreSource = "heuristic" | "llm_judge";
 
 export type PolicyAction = "allow" | "block" | "downgrade" | "escalate";
@@ -26,6 +28,8 @@ export type ModelProfile = {
   qualityScore: number;
   taskScores: Record<TaskType, number>;
   strengths: string[];
+  resourceTier?: 1 | 2 | 3 | 4 | 5;
+  bestFor?: string;
 };
 
 export type PromptCase = {
@@ -112,6 +116,7 @@ export type PolicyDecision = {
 };
 
 export type BootstrapPayload = {
+  source?: "database" | "seed";
   models: ModelProfile[];
   promptCases: PromptCase[];
   recentResults: EvalResult[];

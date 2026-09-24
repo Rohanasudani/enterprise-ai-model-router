@@ -1,7 +1,7 @@
 {
   "name": "ai-model-router",
   "version": "0.1.0",
-  "description": "Enterprise LLM routing and eval platform with policy-aware model selection, budgets, and savings reports.",
+  "description": "Explainable LLM recommendation and evaluation platform with reusable enterprise and higher-education scenarios.",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
@@ -12,6 +12,7 @@
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "capture:screenshots": "tsx scripts/capture-screenshots.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",

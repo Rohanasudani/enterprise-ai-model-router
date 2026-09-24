@@ -2,15 +2,24 @@
 
 ## System Goal
 
-The router answers a practical enterprise AI question:
+The router answers a practical organizational AI question:
 
-> Given a developer request, which model should the company use, and should the request be allowed at all?
+> Given a real task, which model best fits the task and the organization’s constraints, and should the request be allowed at all?
 
-The platform combines eval quality, cost controls, latency preferences, context requirements, task type, team budget, and company policy.
+The platform combines evaluation quality, resource or cost controls, latency preferences, context requirements, task type, budget, and organization policy.
+
+## Scenario Packs
+
+The UI separates reusable routing logic from audience-specific data:
+
+- **Enterprise** uses persisted model, prompt, user, team, and policy data from the API when available.
+- **Higher Education** supplies a synthetic local catalog, representative campus workloads, and campus-oriented labels. It is deliberately shadow mode: no live provider calls, university identity, production prompt persistence, or claimed institutional integration.
+
+This preserves the product’s enterprise value while demonstrating how the same engine can be adapted to another governed environment.
 
 ## Request Lifecycle
 
-1. A prompt case or enterprise request enters the dashboard.
+1. A scenario pack and prompt case enter the dashboard.
 2. The policy engine classifies the request as business, personal, sensitive, or unsafe.
 3. The router scores candidate models using task fit, quality, latency, cost, and context window.
 4. The provider layer runs the eval in mock mode or live OpenAI mode.
@@ -68,7 +77,7 @@ Main persisted entities:
 
 The router is intentionally explainable. A company should not only know which model was selected; it should know why that model was selected, what tradeoffs were made, and how much money was saved by choosing a cheaper model or blocking an invalid request.
 
-This makes the project useful for AI platform teams, developer productivity teams, and infrastructure groups managing LLM usage at scale.
+This makes the project useful for AI platform teams, developer productivity teams, infrastructure groups, and institutional AI-governance teams managing LLM usage at scale.
 
 ## Router Scoring
 
@@ -95,7 +104,7 @@ The result is normalized by the total weight and rounded for display. Each recom
 
 ## Policy Engine
 
-The policy engine answers a separate question from the router: should the company allow this request at all?
+The policy engine answers a separate question from the router: should the organization allow this request at all?
 
 It classifies the request into categories such as business work, personal use, sensitive content, or unsafe usage. It then combines that classification with requester metadata, team budget, requested model, and model alternatives.
 
@@ -136,7 +145,7 @@ Implemented safeguards:
 - security headers are configured in `next.config.ts`
 - automated unit and E2E tests run in CI
 
-Known next steps for a real company deployment:
+Known next steps for a real organizational deployment:
 
 - replace the demo admin key with OAuth/RBAC
 - move rate limiting to Redis, Vercel KV, or another shared store
