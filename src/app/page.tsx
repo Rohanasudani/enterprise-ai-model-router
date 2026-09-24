@@ -9,10 +9,19 @@ import {
   users as seedUsers,
 } from "@/lib/data";
 import { runMockEval } from "@/lib/mockEval";
+import { makePolicyDecision } from "@/lib/policyEngine";
 import { defaultRouterWeights, recommendModel } from "@/lib/router";
+import {
+  higherEducationModels,
+  higherEducationPromptCases,
+  higherEducationTeams,
+  higherEducationUsers,
+  scenarioCopy,
+} from "@/lib/scenarios";
 import type {
   AppUser,
   BootstrapPayload,
+  DeploymentScenario,
   EvalMode,
   EvalResult,
   EvalRunPayload,
@@ -34,6 +43,19 @@ function currency(value: number) {
 
 function percent(value: number) {
   return `${Math.round(value)}%`;
+}
+
+function resourceMarks(model: ModelProfile) {
+  if (model.resourceTier) {
+    return "$".repeat(model.resourceTier);
+  }
+
+  const blendedPrice = model.inputCostPerMTok + model.outputCostPerMTok;
+  if (blendedPrice <= 1) return "$";
+  if (blendedPrice <= 5) return "$$";
+  if (blendedPrice <= 18) return "$$$";
+  if (blendedPrice <= 30) return "$$$$";
+  return "$$$$$";
 }
 
 function categoryLabel(value: string) {
@@ -83,6 +105,8 @@ function getStoredDemoAdminKey() {
 }
 
 export default function Home() {
+  const [scenario, setScenario] = useState<DeploymentScenario>("enterprise");
+  const [selectionMode, setSelectionMode] = useState<"auto" | "manual">("auto");
   const [models, setModels] = useState<ModelProfile[]>(seedModels);
   const [promptCases, setPromptCases] = useState<PromptCase[]>(seedPromptCases);
   const [teams, setTeams] = useState<Team[]>(seedTeams);
@@ -107,13 +131,33 @@ export default function Home() {
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [runMessage, setRunMessage] = useState("Ready to run model comparison.");
   const [judgeMessage, setJudgeMessage] = useState("Run an eval, then judge the saved outputs.");
-  const [policyMessage, setPolicyMessage] = useState("Ready to route enterprise request.");
+  const [policyMessage, setPolicyMessage] = useState("Ready to route organization request.");
   const [promptMessage, setPromptMessage] = useState("Edit an existing prompt case or create a new dataset item.");
+  const enterpriseSnapshotRef = useRef<{
+    models: ModelProfile[];
+    promptCases: PromptCase[];
+    teams: Team[];
+    users: AppUser[];
+    history: EvalResult[];
+    recentPolicyDecisions: PolicyDecision[];
+    policyDecision: PolicyDecision | null;
+    savingsReport: SavingsReport | null;
+    source: "seed" | "database";
+  }>({
+    models: seedModels,
+    promptCases: seedPromptCases,
+    teams: seedTeams,
+    users: seedUsers,
+    history: seedRunHistory,
+    recentPolicyDecisions: [],
+    policyDecision: null,
+    savingsReport: null,
+    source: "seed",
+  });
 
   const selectedPrompt = promptCases.find((prompt) => prompt.id === selectedPromptId) ?? promptCases[0] ?? seedPromptCases[0];
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? seedUsers[0];
   const selectedTeam = teams.find((team) => team.id === selectedUser.teamId) ?? teams[0] ?? seedTeams[0];
-  const requestedModel = models.find((model) => model.id === requestedModelId) ?? models[0];
   const policySelectedModel = policyDecision
     ? models.find((model) => model.id === policyDecision.selectedModelId)
     : undefined;
@@ -122,20 +166,37 @@ export default function Home() {
   const policyDecisionRequestedModel = policyDecision
     ? models.find((model) => model.id === policyDecision.requestedModelId)
     : undefined;
-  const hasUnsavedPolicyInputs = policyDecision
-    ? policyDecision.promptId !== selectedPrompt.id ||
-      policyDecision.userId !== selectedUser.id ||
-      policyDecision.requestedModelId !== requestedModelId
-    : false;
   const decision = useMemo(
     () => recommendModel(selectedPrompt, latestResults, weights, models),
     [latestResults, selectedPrompt, weights, models],
   );
   const winner = models.find((model) => model.id === decision.modelId) ?? models[0];
   const winnerResult = latestResults.find((result) => result.modelId === winner.id) ?? latestResults[0];
+  const effectiveRequestedModelId = selectionMode === "auto" ? decision.modelId : requestedModelId;
+  const effectiveRequestedModel = models.find((model) => model.id === effectiveRequestedModelId) ?? winner;
+  const hasUnsavedPolicyInputs = policyDecision
+    ? policyDecision.promptId !== selectedPrompt.id ||
+      policyDecision.userId !== selectedUser.id ||
+      policyDecision.requestedModelId !== effectiveRequestedModelId
+    : false;
   const averageQuality = latestResults.reduce((sum, result) => sum + result.score, 0) / latestResults.length;
   const bestCost = Math.min(...latestResults.map((result) => result.totalCostUsd));
   const fastestLatency = Math.min(...latestResults.map((result) => result.latencyMs));
+  const qualityAlternative = [...latestResults].sort((left, right) => right.score - left.score)[0];
+  const budgetAlternative = [...latestResults].sort((left, right) => left.totalCostUsd - right.totalCostUsd)[0];
+  const qualityAlternativeModel = models.find((model) => model.id === qualityAlternative?.modelId) ?? winner;
+  const budgetAlternativeModel = models.find((model) => model.id === budgetAlternative?.modelId) ?? winner;
+  const scenarioDetails = scenarioCopy[scenario];
+  const shadowRequestedCost = recentPolicyDecisions.reduce(
+    (sum, item) => sum + item.estimatedRequestedCostUsd,
+    0,
+  );
+  const shadowRoutedCost = recentPolicyDecisions.reduce((sum, item) => sum + item.estimatedRoutedCostUsd, 0);
+  const shadowSavings = recentPolicyDecisions.reduce((sum, item) => sum + item.savingsUsd, 0);
+  const actionCount = (action: PolicyDecision["action"]) =>
+    scenario === "higher_education"
+      ? recentPolicyDecisions.filter((item) => item.action === action).length
+      : savingsReport?.actionCounts[action] ?? 0;
 
   function guardedHeaders() {
     const headers: Record<string, string> = {
@@ -210,7 +271,19 @@ export default function Home() {
         setRecentPolicyDecisions(payload.recentPolicyDecisions);
         setPolicyDecision(payload.recentPolicyDecisions[0] ?? null);
         void refreshSavingsReport();
-        setDataSource("database");
+        const bootstrapSource = payload.source ?? "database";
+        setDataSource(bootstrapSource);
+        enterpriseSnapshotRef.current = {
+          models: payload.models,
+          promptCases: payload.promptCases,
+          teams: payload.teams,
+          users: payload.users,
+          history: payload.recentResults,
+          recentPolicyDecisions: payload.recentPolicyDecisions,
+          policyDecision: payload.recentPolicyDecisions[0] ?? null,
+          savingsReport: null,
+          source: bootstrapSource,
+        };
       } catch {
         setDataSource("seed");
       }
@@ -218,6 +291,77 @@ export default function Home() {
 
     void loadBootstrapData(bootstrapAdminKeyRef.current);
   }, []);
+
+  function changeScenario(nextScenario: DeploymentScenario) {
+    if (nextScenario === scenario) {
+      return;
+    }
+
+    if (scenario === "enterprise" && nextScenario === "higher_education") {
+      enterpriseSnapshotRef.current = {
+        models,
+        promptCases,
+        teams,
+        users,
+        history,
+        recentPolicyDecisions,
+        policyDecision,
+        savingsReport,
+        source: dataSource,
+      };
+    }
+
+    const nextData =
+      nextScenario === "higher_education"
+        ? {
+            models: higherEducationModels,
+            promptCases: higherEducationPromptCases,
+            teams: higherEducationTeams,
+            users: higherEducationUsers,
+            history: [] as EvalResult[],
+            recentPolicyDecisions: [] as PolicyDecision[],
+            policyDecision: null as PolicyDecision | null,
+            savingsReport: null as SavingsReport | null,
+            source: "seed" as const,
+          }
+        : enterpriseSnapshotRef.current;
+    const firstPrompt = nextData.promptCases[0];
+    const firstUser = nextData.users[0];
+    const firstModel = nextData.models[0];
+
+    setScenario(nextScenario);
+    setModels(nextData.models);
+    setPromptCases(nextData.promptCases);
+    setTeams(nextData.teams);
+    setUsers(nextData.users);
+    setHistory(nextData.history);
+    setSelectedPromptId(firstPrompt.id);
+    setPromptDraft(firstPrompt);
+    setSelectedUserId(firstUser.id);
+    setRequestedModelId(firstModel.id);
+    setLatestResults(runMockEval(firstPrompt, nextData.models));
+    setPolicyDecision(nextData.policyDecision);
+    setRecentPolicyDecisions(nextData.recentPolicyDecisions);
+    setSavingsReport(nextData.savingsReport);
+    setSelectionMode("auto");
+    setEvalMode("mock");
+    setDataSource(nextData.source);
+    setRunMessage(
+      nextScenario === "higher_education"
+        ? "Synthetic shadow-mode estimates are ready. No university systems or user data are connected."
+        : "Ready to run model comparison.",
+    );
+    setJudgeMessage("Run an eval, then judge the saved outputs.");
+    setPolicyMessage(
+      nextScenario === "higher_education"
+        ? "Ready to preview campus guidance without changing live traffic."
+        : "Ready to route organization request.",
+    );
+
+    if (nextScenario === "enterprise" && !nextData.savingsReport) {
+      void refreshSavingsReport();
+    }
+  }
 
   function updatePrompt(promptId: string) {
     const nextPrompt = promptCases.find((prompt) => prompt.id === promptId) ?? promptCases[0];
@@ -272,8 +416,23 @@ export default function Home() {
 
   async function savePromptCase() {
     setIsSavingPrompt(true);
-    setPromptMessage("Saving prompt case to PostgreSQL...");
+    setPromptMessage(
+      scenario === "higher_education" ? "Saving this case locally for the prototype..." : "Saving prompt case to PostgreSQL...",
+    );
     try {
+      if (scenario === "higher_education") {
+        setPromptCases((current) => {
+          const exists = current.some((prompt) => prompt.id === promptDraft.id);
+          return exists
+            ? current.map((prompt) => (prompt.id === promptDraft.id ? promptDraft : prompt))
+            : [...current, promptDraft];
+        });
+        setSelectedPromptId(promptDraft.id);
+        setLatestResults(runMockEval(promptDraft, models));
+        setPromptMessage("Synthetic prompt case saved locally. Nothing was sent to an external service.");
+        return;
+      }
+
       const response = await fetch("/api/prompt-cases", {
         method: "POST",
         headers: guardedHeaders(),
@@ -288,9 +447,14 @@ export default function Home() {
       const payload = (await response.json()) as PromptCasePayload;
       setPromptCases((current) => {
         const exists = current.some((prompt) => prompt.id === payload.promptCase.id);
-        return exists
+        const nextPromptCases = exists
           ? current.map((prompt) => (prompt.id === payload.promptCase.id ? payload.promptCase : prompt))
           : [...current, payload.promptCase];
+        enterpriseSnapshotRef.current = {
+          ...enterpriseSnapshotRef.current,
+          promptCases: nextPromptCases,
+        };
+        return nextPromptCases;
       });
       setSelectedPromptId(payload.promptCase.id);
       setPromptDraft(payload.promptCase);
@@ -306,15 +470,38 @@ export default function Home() {
 
   async function routePolicyRequest() {
     setIsRouting(true);
-    setPolicyMessage("Routing request through enterprise policy...");
+    setPolicyMessage(
+      scenario === "higher_education"
+        ? "Generating a synthetic campus-guidance preview..."
+        : "Routing request through organization policy...",
+    );
     try {
+      if (scenario === "higher_education") {
+        const draft = makePolicyDecision({
+          prompt: selectedPrompt,
+          user: selectedUser,
+          team: selectedTeam,
+          models,
+          requestedModelId: effectiveRequestedModelId,
+        });
+        const preview: PolicyDecision = {
+          ...draft,
+          id: `shadow-preview-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+        };
+        setPolicyDecision(preview);
+        setRecentPolicyDecisions((current) => [preview, ...current].slice(0, 10));
+        setPolicyMessage("Shadow-mode preview generated. It did not change live traffic or store prompt content.");
+        return;
+      }
+
       const response = await fetch("/api/policy-decisions", {
         method: "POST",
         headers: guardedHeaders(),
         body: JSON.stringify({
           promptId: selectedPrompt.id,
           userId: selectedUser.id,
-          requestedModelId,
+          requestedModelId: effectiveRequestedModelId,
         }),
       });
 
@@ -349,8 +536,23 @@ export default function Home() {
 
   async function runEval() {
     setIsRunning(true);
-    setRunMessage(evalMode === "live_openai" ? "Running live OpenAI eval..." : "Running mock eval...");
+    setRunMessage(
+      scenario === "higher_education"
+        ? "Running synthetic university workload comparison..."
+        : evalMode === "live_openai"
+          ? "Running live OpenAI eval..."
+          : "Running mock eval...",
+    );
     try {
+      if (scenario === "higher_education") {
+        const nextResults = runMockEval(selectedPrompt, models);
+        setLatestResults(nextResults);
+        setHistory((current) => [...nextResults, ...current].slice(0, 10));
+        setDataSource("seed");
+        setRunMessage("Synthetic comparison complete. Scores are illustrative until validated in an approved sandbox.");
+        return;
+      }
+
       const response = await fetch("/api/eval-runs", {
         method: "POST",
         headers: guardedHeaders(),
@@ -391,6 +593,11 @@ export default function Home() {
   }
 
   async function judgeLatestResults() {
+    if (scenario === "higher_education") {
+      setJudgeMessage("LLM-as-judge scoring is disabled in the shadow-mode pilot.");
+      return;
+    }
+
     setIsJudging(true);
     setJudgeMessage("Judging latest saved outputs against the rubric...");
     try {
@@ -434,18 +641,28 @@ export default function Home() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            <div className="brand-mark">MR</div>
+            <div className="brand-mark" aria-hidden="true">MR</div>
             <div>
               <h1>AI Model Router</h1>
-              <p>Eval-driven model selection for cost, quality, latency, and context fit</p>
+              <p>Explainable model recommendations for governed organizations</p>
             </div>
           </div>
           <div className="top-actions">
-            <span className="status-pill">{dataSource === "database" ? "PostgreSQL connected" : "Seed fallback"}</span>
-            <span className="status-pill">{evalMode === "live_openai" ? "Live OpenAI mode" : "Mock mode"}</span>
+            <span className="status-pill status-accent">{scenarioDetails.label}</span>
+            <span className="status-pill">
+              {scenario === "higher_education"
+                ? "Synthetic shadow mode"
+                : dataSource === "database"
+                  ? "PostgreSQL connected"
+                  : "Seed fallback"}
+            </span>
             <span className="status-pill">{models.length} models</span>
-            <span className="status-pill">{promptCases.length} prompt cases</span>
-            <button className="secondary-button" onClick={judgeLatestResults} disabled={isJudging}>
+            <button
+              className="secondary-button"
+              onClick={judgeLatestResults}
+              disabled={isJudging || scenario === "higher_education"}
+              title={scenario === "higher_education" ? "Requires an approved live sandbox" : undefined}
+            >
               {isJudging ? "Judging..." : "Judge Latest"}
             </button>
             <button className="primary-button" onClick={runEval} disabled={isRunning}>
@@ -456,15 +673,59 @@ export default function Home() {
       </header>
 
       <div className="content">
+        <section className="hero" aria-labelledby="hero-title">
+          <div className="hero-copy">
+            <span className="eyebrow">{scenarioDetails.eyebrow}</span>
+            <h2 id="hero-title">Choose the right model—not simply the most expensive one.</h2>
+            <p>
+              Compare task fit, quality, speed, context, and resource needs. Every recommendation stays explainable,
+              reviewable, and easy to override.
+            </p>
+            <div className="workflow-strip" aria-label="Recommendation workflow">
+              <span><strong>1</strong> Choose a setting</span>
+              <span><strong>2</strong> Select a real task</span>
+              <span><strong>3</strong> Review the recommendation</span>
+            </div>
+          </div>
+          <div className="scenario-card">
+            <span className="scenario-label">Scenario</span>
+            <div className="scenario-switch" role="group" aria-label="Deployment scenario">
+              <button
+                className={scenario === "enterprise" ? "scenario-option active" : "scenario-option"}
+                onClick={() => changeScenario("enterprise")}
+                type="button"
+              >
+                <span>Enterprise</span>
+                <small>Companies and platform teams</small>
+              </button>
+              <button
+                className={scenario === "higher_education" ? "scenario-option active" : "scenario-option"}
+                onClick={() => changeScenario("higher_education")}
+                type="button"
+              >
+                <span>Higher Education</span>
+                <small>Students, research, and operations</small>
+              </button>
+            </div>
+            <p>{scenarioDetails.description}</p>
+            {scenario === "higher_education" ? (
+              <div className="pilot-note">
+                Illustrative prototype only. Not affiliated with or connected to any university production system.
+              </div>
+            ) : null}
+          </div>
+        </section>
+
         <div className="dashboard-grid">
-          <aside className="panel">
+          <aside className="panel setup-panel">
             <div className="panel-header">
-              <p className="panel-title">Eval Setup</p>
-              <p className="panel-subtitle">Choose a prompt case and tune the router priorities.</p>
+              <span className="section-kicker">Recommendation setup</span>
+              <p className="panel-title">What should the model help with?</p>
+              <p className="panel-subtitle">Choose a representative workload and set the organization’s priorities.</p>
             </div>
             <div className="panel-body">
               <div className="control-group">
-                <label htmlFor="prompt-case">Prompt Case</label>
+                <label htmlFor="prompt-case">Task</label>
                 <select
                   className="select"
                   id="prompt-case"
@@ -484,24 +745,25 @@ export default function Home() {
                 <textarea className="textarea" id="prompt-body" value={selectedPrompt.prompt} readOnly />
               </div>
 
-              <button className="secondary-button" onClick={newPromptCase}>
+              <button className="text-button" onClick={newPromptCase}>
                 New Prompt Case
               </button>
 
               <div className="control-group">
-                <label>Provider Mode</label>
+                <label>Evaluation evidence</label>
                 <div className="segmented-control" aria-label="Provider mode">
                   <button
                     className={evalMode === "mock" ? "segment active" : "segment"}
                     type="button"
                     onClick={() => setEvalMode("mock")}
                   >
-                    Mock
+                    Simulated
                   </button>
                   <button
                     className={evalMode === "live_openai" ? "segment active" : "segment"}
                     type="button"
                     onClick={() => setEvalMode("live_openai")}
+                    disabled={scenario === "higher_education"}
                   >
                     Live OpenAI
                   </button>
@@ -514,7 +776,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="control-group">
+              <div className={scenario === "higher_education" ? "control-group visually-muted" : "control-group"}>
                 <label htmlFor="demo-admin-key">Demo Admin Key</label>
                 <input
                   autoComplete="off"
@@ -524,6 +786,7 @@ export default function Home() {
                   type="password"
                   value={demoAdminKey}
                   onChange={(event) => updateDemoAdminKey(event.target.value)}
+                  disabled={scenario === "higher_education"}
                 />
               </div>
 
@@ -547,12 +810,35 @@ export default function Home() {
               </div>
 
               <div className="control-group">
-                <label htmlFor="requested-model">Requested Model</label>
+                <label>Selection behavior</label>
+                <div className="segmented-control" aria-label="Selection behavior">
+                  <button
+                    className={selectionMode === "auto" ? "segment active" : "segment"}
+                    type="button"
+                    onClick={() => setSelectionMode("auto")}
+                  >
+                    Auto — Recommended
+                  </button>
+                  <button
+                    className={selectionMode === "manual" ? "segment active" : "segment"}
+                    type="button"
+                    onClick={() => setSelectionMode("manual")}
+                  >
+                    Manual choice
+                  </button>
+                </div>
+              </div>
+
+              <div className="control-group">
+                <label htmlFor="requested-model">
+                  {selectionMode === "auto" ? "Current recommendation" : "Requested model"}
+                </label>
                 <select
                   className="select"
                   id="requested-model"
-                  value={requestedModelId}
+                  value={selectionMode === "auto" ? effectiveRequestedModelId : requestedModelId}
                   onChange={(event) => updateRequestedModel(event.target.value)}
+                  disabled={selectionMode === "auto"}
                 >
                   {models.map((model) => (
                     <option key={model.id} value={model.id}>
@@ -563,6 +849,13 @@ export default function Home() {
                 <p className="helper-text" data-testid="policy-message">
                   {policyMessage}
                 </p>
+              </div>
+
+              <div className="priority-heading">
+                <span>Routing priorities</span>
+                <button className="text-button" type="button" onClick={() => setWeights(defaultRouterWeights)}>
+                  Reset
+                </button>
               </div>
 
               <div className="control-group">
@@ -625,11 +918,12 @@ export default function Home() {
                 </div>
               </div>
 
-              <button className="secondary-button" onClick={() => setWeights(defaultRouterWeights)}>
-                Reset Weights
-              </button>
               <button className="primary-button policy-button" onClick={routePolicyRequest} disabled={isRouting}>
-                {isRouting ? "Routing..." : "Route Request"}
+                {isRouting
+                  ? "Analyzing..."
+                  : scenario === "higher_education"
+                    ? "Preview Campus Guidance"
+                    : "Route Request"}
               </button>
             </div>
           </aside>
@@ -637,9 +931,9 @@ export default function Home() {
           <section>
             <div className="metric-strip">
               <div className="metric">
-                <div className="metric-label">Savings</div>
-                <div className="metric-value">{currency(savingsReport?.totalSavingsUsd ?? 0)}</div>
-                <div className="metric-note">{savingsReport?.savingsPercent ?? 0}% saved by policy</div>
+                <div className="metric-label">Resource tier</div>
+                <div className="metric-value resource-marks">{resourceMarks(winner)}</div>
+                <div className="metric-note">relative within this model catalog</div>
               </div>
               <div className="metric">
                 <div className="metric-label">Recommended Preview</div>
@@ -656,9 +950,9 @@ export default function Home() {
                 <div className="metric-note">not persisted until Run Eval</div>
               </div>
               <div className="metric">
-                <div className="metric-label">Best Cost</div>
-                <div className="metric-value">{currency(bestCost)}</div>
-                <div className="metric-note">lowest eval run cost</div>
+                <div className="metric-label">Budget Alternative</div>
+                <div className="metric-value compact-value">{budgetAlternativeModel.name}</div>
+                <div className="metric-note">{scenario === "higher_education" ? resourceMarks(budgetAlternativeModel) : currency(bestCost)}</div>
               </div>
               <div className="metric">
                 <div className="metric-label">Fastest</div>
@@ -668,10 +962,14 @@ export default function Home() {
             </div>
 
             <div className="main-grid">
-              <div className="panel" data-testid="dataset-manager-panel">
+              <div className="panel dataset-panel" data-testid="dataset-manager-panel">
                 <div className="panel-header">
                   <p className="panel-title">Dataset and Rubric Manager</p>
-                  <p className="panel-subtitle">Create or update prompt cases that persist to PostgreSQL.</p>
+                  <p className="panel-subtitle">
+                    {scenario === "higher_education"
+                      ? "Edit the synthetic evaluation case locally. Persistence requires an approved integration."
+                      : "Create or update prompt cases that persist to PostgreSQL."}
+                  </p>
                 </div>
                 <div className="panel-body prompt-editor">
                   <div className="form-grid two">
@@ -772,7 +1070,13 @@ export default function Home() {
                           value={criterion.description}
                           onChange={(event) => updateRubricCriterion(index, { description: event.target.value })}
                         />
-                        <button className="icon-button" type="button" onClick={() => removeRubricCriterion(index)}>
+                        <button
+                          aria-label={`Remove ${criterion.name || "rubric"} criterion`}
+                          className="icon-button"
+                          title="Remove rubric criterion"
+                          type="button"
+                          onClick={() => removeRubricCriterion(index)}
+                        >
                           -
                         </button>
                       </div>
@@ -790,59 +1094,69 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel" data-testid="savings-report-panel">
+              <div className="panel savings-panel" data-testid="savings-report-panel">
                 <div className="panel-header">
                   <p className="panel-title">Savings Report</p>
-                  <p className="panel-subtitle">Enterprise spend governance across policy-routed requests.</p>
+                  <p className="panel-subtitle">Organization-wide resource governance across policy decisions.</p>
                 </div>
                 <div className="panel-body recommendation">
                   <div className="policy-stats">
                     <div>
                       <span>Requested</span>
-                      <strong>{currency(savingsReport?.totalRequestedCostUsd ?? 0)}</strong>
+                      <strong>{currency(scenario === "higher_education" ? shadowRequestedCost : savingsReport?.totalRequestedCostUsd ?? 0)}</strong>
                     </div>
                     <div>
                       <span>Routed</span>
-                      <strong>{currency(savingsReport?.totalRoutedCostUsd ?? 0)}</strong>
+                      <strong>{currency(scenario === "higher_education" ? shadowRoutedCost : savingsReport?.totalRoutedCostUsd ?? 0)}</strong>
                     </div>
                     <div>
                       <span>Decisions</span>
-                      <strong>{savingsReport?.decisionCount ?? 0}</strong>
+                      <strong>{scenario === "higher_education" ? recentPolicyDecisions.length : savingsReport?.decisionCount ?? 0}</strong>
                     </div>
                   </div>
                   <div className="action-grid">
                     <div>
                       <span className="mini-action allow">allow</span>
-                      <strong>{savingsReport?.actionCounts.allow ?? 0}</strong>
+                      <strong>{actionCount("allow")}</strong>
                     </div>
                     <div>
                       <span className="mini-action block">block</span>
-                      <strong>{savingsReport?.actionCounts.block ?? 0}</strong>
+                      <strong>{actionCount("block")}</strong>
                     </div>
                     <div>
                       <span className="mini-action downgrade">downgrade</span>
-                      <strong>{savingsReport?.actionCounts.downgrade ?? 0}</strong>
+                      <strong>{actionCount("downgrade")}</strong>
                     </div>
                     <div>
                       <span className="mini-action escalate">escalate</span>
-                      <strong>{savingsReport?.actionCounts.escalate ?? 0}</strong>
+                      <strong>{actionCount("escalate")}</strong>
                     </div>
                   </div>
-                  <div className="export-row">
-                    <a className="secondary-link" href="/api/reports/savings" target="_blank">
-                      Export JSON
-                    </a>
-                    <a className="secondary-link" href="/api/reports/savings?format=csv">
-                      Export CSV
-                    </a>
-                  </div>
+                  {scenario === "higher_education" ? (
+                    <div className="savings-callout">
+                      <span>Illustrative resource savings</span>
+                      <strong>{currency(shadowSavings)}</strong>
+                      <small>Calculated from synthetic shadow-mode decisions only.</small>
+                    </div>
+                  ) : (
+                    <div className="export-row">
+                      <a className="secondary-link" href="/api/reports/savings" target="_blank">
+                        Export JSON
+                      </a>
+                      <a className="secondary-link" href="/api/reports/savings?format=csv">
+                        Export CSV
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="panel" data-testid="model-comparison-panel">
+              <div className="panel comparison-panel" data-testid="model-comparison-panel">
                 <div className="panel-header">
                   <p className="panel-title">Model Comparison</p>
-                  <p className="panel-subtitle">Average quality for this run: {averageQuality.toFixed(1)}/100</p>
+                  <p className="panel-subtitle">
+                    Average quality: {averageQuality.toFixed(1)}/100 · {scenario === "higher_education" ? "synthetic estimates" : "latest evaluation"}
+                  </p>
                 </div>
                 <div className="table-wrap">
                   <table className="table">
@@ -852,7 +1166,7 @@ export default function Home() {
                         <th>Quality</th>
                         <th>Score Source</th>
                         <th>Latency</th>
-                        <th>Cost</th>
+                        <th>Resources</th>
                         <th>Context</th>
                         <th>Strengths</th>
                       </tr>
@@ -874,11 +1188,16 @@ export default function Home() {
                             </td>
                             <td>
                               <span className={`source-badge ${result.scoreSource}`}>
-                                {result.scoreSource === "llm_judge" ? "LLM judge" : "heuristic"}
+                                {result.scoreSource === "llm_judge" ? "LLM judge" : "simulated"}
                               </span>
                             </td>
                             <td>{result.latencyMs.toLocaleString()} ms</td>
-                            <td>{currency(result.totalCostUsd)}</td>
+                            <td>
+                              <strong className="resource-cell">{resourceMarks(model)}</strong>
+                              <div className="provider">
+                                {scenario === "higher_education" ? "relative tier" : currency(result.totalCostUsd)}
+                              </div>
+                            </td>
                             <td>{model.contextWindow.toLocaleString()}</td>
                             <td>
                               <div className="tag-row">
@@ -897,31 +1216,57 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel" data-testid="router-preview-panel">
+              <div className="panel recommendation-panel" data-testid="router-preview-panel">
                 <div className="panel-header">
-                  <p className="panel-title">Router Preview</p>
+                  <span className="section-kicker">Auto — Recommended</span>
+                  <p className="panel-title">Explainable Model Recommendation</p>
                   <p className="panel-subtitle">
-                    Updates instantly from the current weights. Click Run Eval to refresh model outputs and save a run.
+                    Updates instantly as the task and priorities change. Manual override always remains available.
                   </p>
                 </div>
                 <div className="panel-body recommendation">
                   <div className="recommendation-head">
                     <div>
-                      <span className="model-badge">{winner.provider}</span>
+                      <div className="badge-row">
+                        <span className="model-badge">{winner.provider}</span>
+                        <span className="evidence-badge">
+                          {scenario === "higher_education"
+                            ? "Synthetic estimate"
+                            : evalMode === "mock"
+                              ? "Simulated"
+                              : "Live evidence"}
+                        </span>
+                      </div>
                       <h2>{winner.name}</h2>
                       <p className="panel-subtitle">
-                        Best fit for {selectedPrompt.taskType} with difficulty {selectedPrompt.difficulty}/100.
+                        {winner.bestFor ?? `Best fit for ${selectedPrompt.taskType}`} · difficulty {selectedPrompt.difficulty}/100
                       </p>
                     </div>
-                    <div className="score-large">{decision.routerScore}</div>
+                    <div className="recommendation-score">
+                      <span>Fit score</span>
+                      <strong>{decision.routerScore}</strong>
+                      <small>{resourceMarks(winner)} resources</small>
+                    </div>
                   </div>
                   <ul className="reason-list">
                     {decision.reasons.map((reason) => (
                       <li key={reason}>{reason}</li>
                     ))}
                   </ul>
+                  <div className="alternative-grid">
+                    <article>
+                      <span>Lower-resource option</span>
+                      <strong>{budgetAlternativeModel.name}</strong>
+                      <small>{resourceMarks(budgetAlternativeModel)} · {budgetAlternative?.score ?? 0}/100 quality</small>
+                    </article>
+                    <article>
+                      <span>Highest-quality option</span>
+                      <strong>{qualityAlternativeModel.name}</strong>
+                      <small>{resourceMarks(qualityAlternativeModel)} · {qualityAlternative?.score ?? 0}/100 quality</small>
+                    </article>
+                  </div>
                   <div>
-                    <p className="panel-title">Winning Output</p>
+                    <p className="panel-title">Evaluation sample</p>
                     <pre className="output-box mono">{winnerResult.output}</pre>
                     {winnerResult.judgeExplanation ? (
                       <p className="judge-note">{winnerResult.judgeExplanation}</p>
@@ -930,7 +1275,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel" data-testid="saved-policy-decision-panel">
+              <div className="panel policy-panel" data-testid="saved-policy-decision-panel">
                 <div className="panel-header">
                   <p className="panel-title">Saved Policy Decision</p>
                   <p className="panel-subtitle">
@@ -938,13 +1283,13 @@ export default function Home() {
                       ? `${policyDecisionUser?.name ?? "Requester"} · ${policyDecisionTeam?.name ?? "Team"} · ${
                           policyDecisionRequestedModel?.name ?? "Requested model"
                         } requested`
-                      : `${selectedUser.name} · ${selectedTeam.name} · ${requestedModel.name} ready to route`}
+                      : `${selectedUser.name} · ${selectedTeam.name} · ${effectiveRequestedModel.name} ready to preview`}
                   </p>
                 </div>
                 <div className="panel-body recommendation">
                   {hasUnsavedPolicyInputs ? (
                     <div className="notice-banner" data-testid="unsaved-policy-banner">
-                      Controls changed after this decision. Click Route Request to update the audit result.
+                      Controls changed after this decision. Preview again to update the result.
                     </div>
                   ) : null}
                   {policyDecision ? (
@@ -980,12 +1325,12 @@ export default function Home() {
                       </ul>
                     </>
                   ) : (
-                    <p className="panel-subtitle">Run a policy route to create the first audit decision.</p>
+                    <p className="panel-subtitle">Preview guidance to create the first explainable policy decision.</p>
                   )}
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel rubric-panel">
                 <div className="panel-header">
                   <p className="panel-title">Rubric Scores</p>
                   <p className="panel-subtitle">{selectedPrompt.expectedOutput}</p>
@@ -1009,7 +1354,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel history-panel">
                 <div className="panel-header">
                   <p className="panel-title">Recent Runs</p>
                   <p className="panel-subtitle">Last 10 eval results across model and prompt cases.</p>
@@ -1033,10 +1378,10 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel audit-panel">
                 <div className="panel-header">
                   <p className="panel-title">Policy Audit Log</p>
-                  <p className="panel-subtitle">Recent enterprise routing decisions.</p>
+                  <p className="panel-subtitle">Recent organization policy and guidance decisions.</p>
                 </div>
                 <div className="panel-body">
                   {recentPolicyDecisions.slice(0, 6).map((decision) => {
@@ -1059,13 +1404,26 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel budget-panel">
                 <div className="panel-header">
                   <p className="panel-title">Team Budget Utilization</p>
                   <p className="panel-subtitle">Spend, budget, and savings by team.</p>
                 </div>
                 <div className="panel-body">
-                  {(savingsReport?.teamSummaries ?? []).map((team) => (
+                  {(scenario === "higher_education"
+                    ? teams.map((team) => ({
+                        teamId: team.id,
+                        teamName: team.name,
+                        monthlyBudgetUsd: team.monthlyBudgetUsd,
+                        currentSpendUsd: team.currentSpendUsd,
+                        savingsUsd: recentPolicyDecisions
+                          .filter((item) => item.teamId === team.id)
+                          .reduce((sum, item) => sum + item.savingsUsd, 0),
+                        budgetUsedPercent: Math.round((team.currentSpendUsd / team.monthlyBudgetUsd) * 100),
+                        decisionCount: recentPolicyDecisions.filter((item) => item.teamId === team.id).length,
+                      }))
+                    : savingsReport?.teamSummaries ?? []
+                  ).map((team) => (
                     <article className="team-budget" key={team.teamId}>
                       <div className="run-title">
                         <span>{team.teamName}</span>
@@ -1080,7 +1438,9 @@ export default function Home() {
                       </div>
                     </article>
                   ))}
-                  {!savingsReport ? <p className="panel-subtitle">Savings report unavailable until the API responds.</p> : null}
+                  {scenario === "enterprise" && !savingsReport ? (
+                    <p className="panel-subtitle">Savings report unavailable until the API responds.</p>
+                  ) : null}
                 </div>
               </div>
             </div>
