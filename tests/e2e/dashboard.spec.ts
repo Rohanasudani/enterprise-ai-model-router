@@ -102,6 +102,8 @@ test("higher-education scenario stays synthetic and explains its limits", async 
   await expect(page.getByRole("button", { name: "Judge Latest" })).toBeDisabled();
   await expect(page.getByLabel("Task", { exact: true })).toHaveValue("student-concept-001");
   await expect(page.getByTestId("savings-report-panel")).toContainText("Illustrative resource savings");
+  await expect(page.getByTestId("router-preview-panel")).toContainText("Estimated resource demand: Tier");
+  await expect(page.getByTestId("router-preview-panel")).not.toContainText("Estimated cost is $");
   await expect(page.getByRole("link", { name: "Export JSON" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Run Eval" }).click();
@@ -124,7 +126,7 @@ test("core recommendation flow remains usable on a mobile viewport", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await openDashboard(page);
 
-  await expect(page.getByRole("heading", { name: /Choose the right model/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Match models to tasks/ })).toBeVisible();
   await page.getByRole("button", { name: /Higher Education/ }).click();
   await expect(page.getByTestId("recommended-preview")).toContainText("GPT-5.6 Luna");
 

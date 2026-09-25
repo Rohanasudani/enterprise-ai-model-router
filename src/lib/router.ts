@@ -1,6 +1,10 @@
 import { models } from "./data";
 import type { EvalResult, ModelProfile, PromptCase, RouterDecision, RouterWeights } from "./types";
 
+type RecommendationOptions = {
+  resourceDisplay?: "estimated_cost" | "tier";
+};
+
 export const defaultRouterWeights: RouterWeights = {
   quality: 45,
   cost: 20,
@@ -40,6 +44,7 @@ export function recommendModel(
   results: EvalResult[],
   weights: RouterWeights,
   modelProfiles: ModelProfile[] = models,
+  options: RecommendationOptions = {},
 ): RouterDecision {
   const maxCost = Math.max(...results.map((result) => result.totalCostUsd));
   const weightedTotal = weights.quality + weights.cost + weights.latency + weights.context;
@@ -72,13 +77,17 @@ export function recommendModel(
   });
 
   const winner = decisions.sort((a, b) => b.routerScore - a.routerScore)[0];
+  const resourceReason =
+    options.resourceDisplay === "tier" && winner.model.resourceTier
+      ? `Estimated resource demand: Tier ${winner.model.resourceTier} of 5 (relative within this catalog).`
+      : `Estimated cost is $${winner.result.totalCostUsd.toFixed(5)} for ${winner.result.inputTokens + winner.result.outputTokens} tokens.`;
 
   return {
     modelId: winner.model.id,
     routerScore: winner.routerScore,
     reasons: [
       `${winner.model.name} scored ${winner.result.score}/100 on this ${prompt.taskType} eval.`,
-      `Estimated cost is $${winner.result.totalCostUsd.toFixed(5)} for ${winner.result.inputTokens + winner.result.outputTokens} tokens.`,
+      resourceReason,
       `Latency came in at ${winner.result.latencyMs.toLocaleString()} ms against your current latency weight.`,
       `${winner.model.contextWindow.toLocaleString()} token context window comfortably fits this prompt.`,
     ],
