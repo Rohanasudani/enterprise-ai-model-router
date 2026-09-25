@@ -167,8 +167,11 @@ export default function Home() {
     ? models.find((model) => model.id === policyDecision.requestedModelId)
     : undefined;
   const decision = useMemo(
-    () => recommendModel(selectedPrompt, latestResults, weights, models),
-    [latestResults, selectedPrompt, weights, models],
+    () =>
+      recommendModel(selectedPrompt, latestResults, weights, models, {
+        resourceDisplay: scenario === "higher_education" ? "tier" : "estimated_cost",
+      }),
+    [latestResults, selectedPrompt, weights, models, scenario],
   );
   const winner = models.find((model) => model.id === decision.modelId) ?? models[0];
   const winnerResult = latestResults.find((result) => result.modelId === winner.id) ?? latestResults[0];
@@ -676,7 +679,7 @@ export default function Home() {
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
             <span className="eyebrow">{scenarioDetails.eyebrow}</span>
-            <h2 id="hero-title">Choose the right model—not simply the most expensive one.</h2>
+            <h2 id="hero-title">Match models to tasks using capability, speed, and resource needs.</h2>
             <p>
               Compare task fit, quality, speed, context, and resource needs. Every recommendation stays explainable,
               reviewable, and easy to override.

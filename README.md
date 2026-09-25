@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-336791)](https://www.prisma.io/)
 
-An explainable LLM recommendation, evaluation, and governance prototype. It helps an organization choose a model for a real task using quality, latency, context, resource needs, budget, and policy—not only the model name or a row of dollar signs.
+An explainable LLM recommendation, evaluation, and governance prototype. It helps an organization evaluate models for real tasks using quality, latency, context, resource needs, budget, and policy alongside model identifiers and relative resource tiers.
 
 The product has two scenario packs built on the same routing engine:
 
@@ -38,7 +38,7 @@ Live demo: [enterprise-ai-model-router.vercel.app](https://enterprise-ai-model-r
 
 ## Why This Matters
 
-Giving users a list of model names and `$` symbols leaves the hard decision to people who may not know which model fits their task. The router turns that selector into an explainable recommendation:
+In multi-model environments, selecting an appropriate model for a specific task can be difficult without task-level guidance. The router complements model identifiers and resource tiers with an explainable recommendation:
 
 1. identify the workload and its constraints;
 2. compare models using evaluation evidence and resource needs;
@@ -46,7 +46,7 @@ Giving users a list of model names and `$` symbols leaves the hard decision to p
 4. apply organization policy or budget guidance;
 5. keep the user in control with a manual override and audit trail.
 
-It is not an OpenRouter clone and it is not a production proxy. It is a portfolio-grade control-plane prototype that demonstrates the product logic and the integration boundary around an existing chat interface or model gateway.
+It is not an OpenRouter clone and it is not a production proxy. It is a governance control-plane prototype that demonstrates the product logic and the integration boundary around an existing chat interface or model gateway.
 
 ## Higher-Education Pilot
 

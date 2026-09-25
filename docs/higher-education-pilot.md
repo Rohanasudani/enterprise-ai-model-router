@@ -6,7 +6,7 @@ This is an independent prototype and pilot proposal. It is **not affiliated with
 
 ## Problem Hypothesis
 
-A multi-model AI interface can expose several model names and relative resource symbols while still leaving users unsure which model fits a specific task. That can create two avoidable patterns:
+In a multi-model AI interface, task-level guidance can help users interpret model identifiers and relative resource tiers. The pilot explores two opportunities:
 
 - users choose an expensive model for routine work because it appears strongest;
 - users choose a lightweight model for complex work without understanding the quality tradeoff.
